@@ -1,0 +1,65 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+// Shopify Session (required - don't modify)
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// Campaign Settings - one per shop
+model Campaign {
+  id              String   @id @default(cuid())
+  shop            String   @unique  // myshop.myshopify.com
+  
+  // Core Settings
+  enabled         Boolean  @default(false)
+  discountPercent Int      @default(10)    // 5-20%
+  timerMinutes    Int      @default(10)    // 5-15 minutes
+  
+  // Display Settings
+  displayStyle    String   @default("progress") // "progress" or "countdown"
+  primaryColor    String   @default("#000000")
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Active Timer Sessions - tracks each customer's timer
+model TimerSession {
+  id           String   @id @default(cuid())
+  shop         String
+  cartToken    String   
+  expiresAt    DateTime
+  discountCode String?
+  isExpired    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  
+  @@unique([shop, cartToken])
+  @@index([shop])
+  @@index([expiresAt])
+}
