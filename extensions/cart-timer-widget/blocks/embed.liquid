@@ -1,0 +1,167 @@
+{% comment %}
+  Cart Timer - App Embed for Cart Drawers
+{% endcomment %}
+
+<script>
+(function() {
+  const SHOP = '{{ shop.permanent_domain }}';
+  
+  let config = {
+    discountPercent: 10,
+    timerMinutes: 10,
+    primaryColor: '#6366f1'
+  };
+
+  function createHTML() {
+    return `
+      <div id="cte-widget" style="
+        --c: ${config.primaryColor};
+        font-family: -apple-system, sans-serif;
+        background: linear-gradient(135deg, #fff, #f8fafc);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin: 12px 0;
+      ">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;background:var(--c);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div style="flex:1;">
+            <p style="margin:0 0 6px;font-size:13px;color:#1e293b;">
+              🎁 <strong style="color:var(--c);">${config.discountPercent}% off</strong> - complete your order!
+            </p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
+                <div id="cte-fill" style="height:100%;background:var(--c);width:100%;transition:width 1s;"></div>
+              </div>
+              <span id="cte-time" style="font-size:12px;color:#64748b;font-weight:600;">${config.timerMinutes}:00</span>
+            </div>
+          </div>
+          <button id="cte-close" style="width:24px;height:24px;border:none;background:#f1f5f9;color:#94a3b8;cursor:pointer;border-radius:6px;font-size:14px;">×</button>
+        </div>
+        <div id="cte-expired" style="display:none;text-align:center;padding:8px 0;">
+          <span style="color:#64748b;font-size:13px;">⏰ Expired</span>
+          <button id="cte-restart" style="background:var(--c);border:none;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-left:8px;">New discount</button>
+        </div>
+      </div>
+    `;
+  }
+
+  let interval, endTime, totalMs;
+
+  function fmt(ms) {
+    if (ms <= 0) return '00:00';
+    const s = Math.floor(ms / 1000);
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function tick() {
+    const fill = document.getElementById('cte-fill');
+    const time = document.getElementById('cte-time');
+    const exp = document.getElementById('cte-expired');
+    const main = document.querySelector('#cte-widget > div:first-child');
+    if (!fill) return;
+
+    const remain = endTime - Date.now();
+    if (remain <= 0) {
+      clearInterval(interval);
+      if (main) main.style.display = 'none';
+      if (exp) exp.style.display = 'block';
+      localStorage.removeItem('cart_timer_' + SHOP);
+      return;
+    }
+    fill.style.width = ((remain / totalMs) * 100) + '%';
+    time.textContent = fmt(remain);
+  }
+
+  function start(exp) {
+    endTime = new Date(exp).getTime();
+    totalMs = config.timerMinutes * 60 * 1000;
+    tick();
+    interval = setInterval(tick, 1000);
+  }
+
+  function newTimer() {
+    const exp = new Date(Date.now() + config.timerMinutes * 60 * 1000).toISOString();
+    localStorage.setItem('cart_timer_' + SHOP, exp);
+    
+    const main = document.querySelector('#cte-widget > div:first-child');
+    const expEl = document.getElementById('cte-expired');
+    if (main) main.style.display = 'flex';
+    if (expEl) expEl.style.display = 'none';
+    
+    start(exp);
+  }
+
+  function inject(target) {
+    if (!target || document.getElementById('cte-widget')) return;
+    
+    const div = document.createElement('div');
+    div.innerHTML = createHTML();
+    target.insertBefore(div.firstElementChild, target.firstChild);
+
+    document.getElementById('cte-close')?.addEventListener('click', () => {
+      document.getElementById('cte-widget')?.remove();
+      sessionStorage.setItem('cart_timer_hidden', 'true');
+    });
+
+    document.getElementById('cte-restart')?.addEventListener('click', newTimer);
+
+    const saved = localStorage.getItem('cart_timer_' + SHOP);
+    if (saved && new Date(saved) > new Date()) {
+      start(saved);
+    } else if (saved) {
+      const main = document.querySelector('#cte-widget > div:first-child');
+      const exp = document.getElementById('cte-expired');
+      if (main) main.style.display = 'none';
+      if (exp) exp.style.display = 'block';
+    } else {
+      newTimer();
+    }
+  }
+
+  function findCart() {
+    const selectors = ['cart-drawer', '.cart-drawer', '[data-cart-drawer]', '.drawer__inner', '#CartDrawer', '.ajaxcart__inner'];
+    for (const s of selectors) {
+      const el = document.querySelector(s);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function init() {
+    if (sessionStorage.getItem('cart_timer_hidden') === 'true') return;
+
+    const obs = new MutationObserver(() => {
+      const cart = findCart();
+      if (cart && cart.offsetParent !== null) inject(cart);
+    });
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+    const cart = findCart();
+    if (cart) inject(cart);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Cart Timer Embed",
+  "target": "head",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Timer settings are configured in the Cart Timer app."
+    }
+  ]
+}
+{% endschema %}

@@ -1,3 +1,10 @@
-name = "cart-timer-widget"
-type = "theme"
+api_version = "2024-01"
+
+[[extensions]]
+name = "Cart Timer Widget"
+handle = "cart-timer-widget"
 uid = "6f93bdb6-65e6-0457-4dba-99089ddc7477981d269c"
+type = "theme"
+
+  [extensions.capabilities]
+  app_embed = true
