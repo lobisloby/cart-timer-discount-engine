@@ -16,7 +16,6 @@ import {
   Percent,
   Palette,
   Power,
-  ChevronRight,
   Check,
   Clock,
   TrendingUp,
@@ -25,13 +24,109 @@ import {
 } from "lucide-react";
 
 // ============================================
-// LOADER - Get campaign settings
+// HELPER: Sync settings to Shopify metafields
+// ============================================
+async function syncSettingsToMetafields(
+  admin: any,
+  settings: {
+    enabled: boolean;
+    discountPercent: number;
+    timerMinutes: number;
+    displayStyle: string;
+    primaryColor: string;
+  },
+  appUrl: string
+) {
+  try {
+    // Get shop ID
+    const shopResponse = await admin.graphql(`
+      query {
+        shop {
+          id
+        }
+      }
+    `);
+    const shopData = await shopResponse.json();
+    const shopId = shopData.data.shop.id;
+
+    // Set all metafields
+    const metafieldsInput = [
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "enabled",
+        value: settings.enabled.toString(),
+        type: "single_line_text_field",
+      },
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "discount_percent",
+        value: settings.discountPercent.toString(),
+        type: "number_integer",
+      },
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "timer_minutes",
+        value: settings.timerMinutes.toString(),
+        type: "number_integer",
+      },
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "display_style",
+        value: settings.displayStyle,
+        type: "single_line_text_field",
+      },
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "primary_color",
+        value: settings.primaryColor,
+        type: "single_line_text_field",
+      },
+      {
+        ownerId: shopId,
+        namespace: "cart_timer",
+        key: "app_url",
+        value: appUrl,
+        type: "single_line_text_field",
+      },
+    ];
+
+    await admin.graphql(
+      `#graphql
+      mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            key
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }`,
+      {
+        variables: {
+          metafields: metafieldsInput,
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Failed to sync metafields:", error);
+  }
+}
+
+// ============================================
+// LOADER
 // ============================================
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  // Get or create campaign settings
   let campaign = await prisma.campaign.findUnique({
     where: { shop },
   });
@@ -43,37 +138,51 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 // ============================================
-// ACTION - Save campaign settings
+// ACTION
 // ============================================
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
   const formData = await request.formData();
   const intent = formData.get("intent");
 
   try {
     if (intent === "toggle") {
-      // Toggle enabled/disabled
       const campaign = await prisma.campaign.findUnique({ where: { shop } });
       const newEnabled = !campaign?.enabled;
 
-      await prisma.campaign.upsert({
+      const updated = await prisma.campaign.upsert({
         where: { shop },
         update: { enabled: newEnabled },
         create: { shop, enabled: newEnabled },
       });
 
-      return { success: true, message: newEnabled ? "Campaign activated!" : "Campaign paused" };
+      // Sync to Shopify metafields
+      await syncSettingsToMetafields(
+        admin,
+        {
+          enabled: updated.enabled,
+          discountPercent: updated.discountPercent,
+          timerMinutes: updated.timerMinutes,
+          displayStyle: updated.displayStyle,
+          primaryColor: updated.primaryColor,
+        },
+        process.env.SHOPIFY_APP_URL || ""
+      );
+
+      return {
+        success: true,
+        message: newEnabled ? "Campaign activated!" : "Campaign paused",
+      };
     }
 
     if (intent === "save") {
-      // Save all settings
       const discountPercent = Number(formData.get("discountPercent")) || 10;
       const timerMinutes = Number(formData.get("timerMinutes")) || 10;
       const displayStyle = (formData.get("displayStyle") as string) || "progress";
-      const primaryColor = (formData.get("primaryColor") as string) || "#000000";
+      const primaryColor = (formData.get("primaryColor") as string) || "#6366f1";
 
-      await prisma.campaign.upsert({
+      const updated = await prisma.campaign.upsert({
         where: { shop },
         update: {
           discountPercent: Math.min(20, Math.max(5, discountPercent)),
@@ -89,6 +198,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           primaryColor,
         },
       });
+
+      // Sync to Shopify metafields
+      await syncSettingsToMetafields(
+        admin,
+        {
+          enabled: updated.enabled,
+          discountPercent: updated.discountPercent,
+          timerMinutes: updated.timerMinutes,
+          displayStyle: updated.displayStyle,
+          primaryColor: updated.primaryColor,
+        },
+        process.env.SHOPIFY_APP_URL || ""
+      );
 
       return { success: true, message: "Settings saved!" };
     }
@@ -277,12 +399,6 @@ const styles = {
     borderRadius: "12px",
     textAlign: "center" as const,
   },
-  statValue: {
-    fontSize: "24px",
-    fontWeight: "700" as const,
-    color: "#1a1a2e",
-    margin: "0 0 4px 0",
-  },
   statLabel: {
     fontSize: "12px",
     color: "#6b7280",
@@ -320,7 +436,6 @@ export default function Dashboard() {
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
-  // Local state for form
   const [settings, setSettings] = useState({
     enabled: campaign?.enabled ?? false,
     discountPercent: campaign?.discountPercent ?? 10,
@@ -329,14 +444,12 @@ export default function Dashboard() {
     primaryColor: campaign?.primaryColor ?? "#6366f1",
   });
 
-  // Show toast on success
   useEffect(() => {
     if (fetcher.data?.success) {
       shopify.toast.show(fetcher.data.message);
     }
   }, [fetcher.data, shopify]);
 
-  // Update local state when campaign data changes
   useEffect(() => {
     if (campaign) {
       setSettings({
@@ -374,10 +487,7 @@ export default function Dashboard() {
       {/* Header */}
       <header style={styles.header}>
         <h1 style={styles.title}>
-          <Timer
-            size={32}
-            style={{ verticalAlign: "middle", marginRight: "8px" }}
-          />
+          <Timer size={32} style={{ verticalAlign: "middle", marginRight: "8px" }} />
           Cart Timer Discount
         </h1>
         <p style={styles.subtitle}>
@@ -394,10 +504,7 @@ export default function Dashboard() {
               background: settings.enabled ? "#dcfce7" : "#fee2e2",
             }}
           >
-            <Power
-              size={20}
-              color={settings.enabled ? "#16a34a" : "#dc2626"}
-            />
+            <Power size={20} color={settings.enabled ? "#16a34a" : "#dc2626"} />
           </div>
           <div>
             <h2 style={styles.cardTitle}>Campaign Status</h2>
@@ -436,7 +543,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Step 1: Discount Amount */}
+      {/* Step 1: Discount */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={{ ...styles.cardIcon, background: "#fef3c7" }}>
@@ -444,9 +551,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h2 style={styles.cardTitle}>Step 1: Discount Amount</h2>
-            <p style={styles.cardDescription}>
-              Choose how much discount to offer
-            </p>
+            <p style={styles.cardDescription}>Choose how much discount to offer</p>
           </div>
         </div>
 
@@ -468,22 +573,14 @@ export default function Dashboard() {
             }
             style={styles.slider}
           />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: "12px",
-              color: "#9ca3af",
-              marginTop: "8px",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#9ca3af", marginTop: "8px" }}>
             <span>5%</span>
             <span>20%</span>
           </div>
         </div>
       </div>
 
-      {/* Step 2: Timer Duration */}
+      {/* Step 2: Duration */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={{ ...styles.cardIcon, background: "#dbeafe" }}>
@@ -491,9 +588,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h2 style={styles.cardTitle}>Step 2: Timer Duration</h2>
-            <p style={styles.cardDescription}>
-              How long customers have to checkout
-            </p>
+            <p style={styles.cardDescription}>How long customers have to checkout</p>
           </div>
         </div>
 
@@ -515,22 +610,14 @@ export default function Dashboard() {
             }
             style={styles.slider}
           />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: "12px",
-              color: "#9ca3af",
-              marginTop: "8px",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#9ca3af", marginTop: "8px" }}>
             <span>5 min</span>
             <span>15 min</span>
           </div>
         </div>
       </div>
 
-      {/* Step 3: Display Style */}
+      {/* Step 3: Style */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={{ ...styles.cardIcon, background: "#f3e8ff" }}>
@@ -538,79 +625,37 @@ export default function Dashboard() {
           </div>
           <div>
             <h2 style={styles.cardTitle}>Step 3: Display Style</h2>
-            <p style={styles.cardDescription}>
-              Choose how the timer appears to customers
-            </p>
+            <p style={styles.cardDescription}>Choose how the timer appears</p>
           </div>
         </div>
 
         <div style={styles.optionGroup}>
           <button
             type="button"
-            onClick={() =>
-              setSettings((prev) => ({ ...prev, displayStyle: "progress" }))
-            }
+            onClick={() => setSettings((prev) => ({ ...prev, displayStyle: "progress" }))}
             style={{
               ...styles.optionButton,
-              ...(settings.displayStyle === "progress"
-                ? styles.optionButtonActive
-                : {}),
+              ...(settings.displayStyle === "progress" ? styles.optionButtonActive : {}),
             }}
           >
-            <div
-              style={{
-                width: "100%",
-                height: "8px",
-                background: "#e5e7eb",
-                borderRadius: "4px",
-                marginBottom: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: "65%",
-                  height: "100%",
-                  background: settings.primaryColor,
-                  borderRadius: "4px",
-                }}
-              />
+            <div style={{ width: "100%", height: "8px", background: "#e5e7eb", borderRadius: "4px", marginBottom: "12px" }}>
+              <div style={{ width: "65%", height: "100%", background: settings.primaryColor, borderRadius: "4px" }} />
             </div>
-            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>
-              Progress Bar
-            </p>
-            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#6b7280" }}>
-              Calm & modern
-            </p>
+            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>Progress Bar</p>
+            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#6b7280" }}>Calm & modern</p>
           </button>
 
           <button
             type="button"
-            onClick={() =>
-              setSettings((prev) => ({ ...prev, displayStyle: "countdown" }))
-            }
+            onClick={() => setSettings((prev) => ({ ...prev, displayStyle: "countdown" }))}
             style={{
               ...styles.optionButton,
-              ...(settings.displayStyle === "countdown"
-                ? styles.optionButtonActive
-                : {}),
+              ...(settings.displayStyle === "countdown" ? styles.optionButtonActive : {}),
             }}
           >
-            <p
-              style={{
-                fontSize: "20px",
-                fontWeight: 700,
-                color: settings.primaryColor,
-                margin: "0 0 12px 0",
-              }}
-            >
-              09:45
-            </p>
-            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>
-              Countdown
-            </p>
-            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#6b7280" }}>
-              Classic timer
-            </p>
+            <p style={{ fontSize: "20px", fontWeight: 700, color: settings.primaryColor, margin: "0 0 12px 0" }}>09:45</p>
+            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>Countdown</p>
+            <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#6b7280" }}>Classic timer</p>
           </button>
         </div>
 
@@ -618,42 +663,22 @@ export default function Dashboard() {
           <input
             type="color"
             value={settings.primaryColor}
-            onChange={(e) =>
-              setSettings((prev) => ({ ...prev, primaryColor: e.target.value }))
-            }
+            onChange={(e) => setSettings((prev) => ({ ...prev, primaryColor: e.target.value }))}
             style={styles.colorSwatch}
           />
           <div>
-            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>
-              Timer Color
-            </p>
-            <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#6b7280" }}>
-              {settings.primaryColor}
-            </p>
+            <p style={{ margin: 0, fontWeight: 600, color: "#1a1a2e" }}>Timer Color</p>
+            <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#6b7280" }}>{settings.primaryColor}</p>
           </div>
         </div>
       </div>
 
       {/* Save Button */}
-      <button
-        onClick={handleSave}
-        disabled={isLoading}
-        style={{
-          ...styles.saveButton,
-          opacity: isLoading ? 0.7 : 1,
-        }}
-      >
-        {isLoading ? (
-          "Saving..."
-        ) : (
-          <>
-            <Check size={20} />
-            Save Settings
-          </>
-        )}
+      <button onClick={handleSave} disabled={isLoading} style={{ ...styles.saveButton, opacity: isLoading ? 0.7 : 1 }}>
+        {isLoading ? "Saving..." : (<><Check size={20} /> Save Settings</>)}
       </button>
 
-      {/* Preview Card */}
+      {/* Preview */}
       <div style={{ ...styles.card, marginTop: "24px" }}>
         <div style={styles.cardHeader}>
           <div style={{ ...styles.cardIcon, background: "#ecfdf5" }}>
@@ -661,9 +686,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h2 style={styles.cardTitle}>Live Preview</h2>
-            <p style={styles.cardDescription}>
-              This is how your timer will appear
-            </p>
+            <p style={styles.cardDescription}>This is how your timer will appear</p>
           </div>
         </div>
 
@@ -671,30 +694,16 @@ export default function Dashboard() {
           <p style={{ margin: "0 0 8px 0", color: "#6b7280", fontSize: "14px" }}>
             🎁 Complete your order for {settings.discountPercent}% off!
           </p>
-
           {settings.displayStyle === "countdown" ? (
             <p style={{ ...styles.previewTimer, color: settings.primaryColor }}>
               {String(settings.timerMinutes).padStart(2, "0")}:00
             </p>
           ) : (
             <div style={styles.progressBar}>
-              <div
-                style={{
-                  ...styles.progressFill,
-                  width: "75%",
-                  background: settings.primaryColor,
-                }}
-              />
+              <div style={{ ...styles.progressFill, width: "75%", background: settings.primaryColor }} />
             </div>
           )}
-
-          <p
-            style={{
-              margin: "12px 0 0 0",
-              fontSize: "12px",
-              color: "#9ca3af",
-            }}
-          >
+          <p style={{ margin: "12px 0 0 0", fontSize: "12px", color: "#9ca3af" }}>
             Time remaining: {settings.timerMinutes}:00
           </p>
         </div>
@@ -705,23 +714,17 @@ export default function Dashboard() {
         <div style={styles.statCard}>
           <Shield size={24} color="#6366f1" style={{ marginBottom: "8px" }} />
           <p style={styles.statLabel}>Server-Side</p>
-          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>
-            Refresh-proof timers
-          </p>
+          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>Refresh-proof timers</p>
         </div>
         <div style={styles.statCard}>
           <TrendingUp size={24} color="#10b981" style={{ marginBottom: "8px" }} />
           <p style={styles.statLabel}>Conversion</p>
-          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>
-            Boost checkout rates
-          </p>
+          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>Boost checkout rates</p>
         </div>
         <div style={styles.statCard}>
           <Zap size={24} color="#f59e0b" style={{ marginBottom: "8px" }} />
           <p style={styles.statLabel}>Performance</p>
-          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>
-            Lightweight code
-          </p>
+          <p style={{ ...styles.statLabel, color: "#1a1a2e", fontWeight: 500 }}>Lightweight code</p>
         </div>
       </div>
     </div>

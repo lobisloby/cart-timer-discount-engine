@@ -1,0 +1,487 @@
+{% comment %}
+  Cart Timer Discount Widget
+  A subtle, trust-building countdown timer
+{% endcomment %}
+
+{% if app.metafields.cart_timer.enabled == "true" %}
+  <div 
+    id="cart-timer-widget"
+    class="cart-timer-widget"
+    data-shop="{{ shop.permanent_domain }}"
+    data-discount-percent="{{ app.metafields.cart_timer.discount_percent | default: 10 }}"
+    data-timer-minutes="{{ app.metafields.cart_timer.timer_minutes | default: 10 }}"
+    data-display-style="{{ app.metafields.cart_timer.display_style | default: 'progress' }}"
+    data-primary-color="{{ app.metafields.cart_timer.primary_color | default: '#6366f1' }}"
+    data-app-url="{{ app.metafields.cart_timer.app_url }}"
+    style="display: none;"
+  >
+    <!-- Timer Container -->
+    <div class="timer-container">
+      <!-- Icon -->
+      <div class="timer-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/>
+          <path d="M21 12H9"/>
+          <path d="m15 8-4 4 4 4"/>
+        </svg>
+      </div>
+
+      <!-- Message -->
+      <div class="timer-content">
+        <p class="timer-message">
+          🎁 Complete your order for <strong id="discount-amount">10%</strong> off!
+        </p>
+        
+        <!-- Progress Bar Style -->
+        <div id="progress-container" class="progress-container" style="display: none;">
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <span id="progress-time" class="progress-time">10:00 remaining</span>
+        </div>
+
+        <!-- Countdown Style -->
+        <div id="countdown-container" class="countdown-container" style="display: none;">
+          <span id="countdown-time" class="countdown-time">10:00</span>
+          <span class="countdown-label">remaining</span>
+        </div>
+      </div>
+
+      <!-- Close Button -->
+      <button id="timer-close" class="timer-close" aria-label="Close timer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Expired State -->
+    <div id="timer-expired" class="timer-expired" style="display: none;">
+      <p class="expired-message">
+        ⏰ Your discount has expired. <button id="restart-timer" class="restart-btn">Get a new one?</button>
+      </p>
+    </div>
+  </div>
+
+  <style>
+    .cart-timer-widget {
+      --timer-color: {{ app.metafields.cart_timer.primary_color | default: '#6366f1' }};
+      
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 16px 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .timer-container {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .timer-icon {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--timer-color);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .timer-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .timer-message {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.4;
+    }
+
+    .timer-message strong {
+      color: var(--timer-color);
+      font-weight: 600;
+    }
+
+    /* Progress Bar Style */
+    .progress-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--timer-color);
+      border-radius: 3px;
+      transition: width 1s linear;
+      width: 100%;
+    }
+
+    .progress-time {
+      flex-shrink: 0;
+      font-size: 12px;
+      color: #6b7280;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Countdown Style */
+    .countdown-container {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .countdown-time {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--timer-color);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.5px;
+    }
+
+    .countdown-label {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    /* Close Button */
+    .timer-close {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .timer-close:hover {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
+    /* Expired State */
+    .timer-expired {
+      text-align: center;
+    }
+
+    .expired-message {
+      margin: 0;
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .restart-btn {
+      background: none;
+      border: none;
+      color: var(--timer-color);
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 14px;
+    }
+
+    .restart-btn:hover {
+      opacity: 0.8;
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 480px) {
+      .cart-timer-widget {
+        padding: 12px 16px;
+        margin: 12px 0;
+      }
+
+      .timer-icon {
+        width: 32px;
+        height: 32px;
+      }
+
+      .timer-message {
+        font-size: 13px;
+      }
+
+      .countdown-time {
+        font-size: 20px;
+      }
+    }
+
+    /* Hidden state */
+    .cart-timer-widget.hidden {
+      display: none !important;
+    }
+  </style>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const widget = document.getElementById('cart-timer-widget');
+      if (!widget) return;
+
+      // Configuration from data attributes
+      const config = {
+        shop: widget.dataset.shop,
+        discountPercent: parseInt(widget.dataset.discountPercent) || 10,
+        timerMinutes: parseInt(widget.dataset.timerMinutes) || 10,
+        displayStyle: widget.dataset.displayStyle || 'progress',
+        primaryColor: widget.dataset.primaryColor || '#6366f1',
+        appUrl: widget.dataset.appUrl || ''
+      };
+
+      // DOM Elements
+      const discountAmount = document.getElementById('discount-amount');
+      const progressContainer = document.getElementById('progress-container');
+      const countdownContainer = document.getElementById('countdown-container');
+      const progressFill = document.getElementById('progress-fill');
+      const progressTime = document.getElementById('progress-time');
+      const countdownTime = document.getElementById('countdown-time');
+      const closeBtn = document.getElementById('timer-close');
+      const timerExpired = document.getElementById('timer-expired');
+      const timerContainer = widget.querySelector('.timer-container');
+      const restartBtn = document.getElementById('restart-timer');
+
+      // State
+      let timerInterval = null;
+      let endTime = null;
+      let totalDuration = config.timerMinutes * 60 * 1000;
+
+      // Get cart token from cookie
+      function getCartToken() {
+        const match = document.cookie.match(/cart=([^;]+)/);
+        return match ? match[1] : null;
+      }
+
+      // Format time as MM:SS
+      function formatTime(ms) {
+        if (ms <= 0) return '00:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+
+      // Update display
+      function updateDisplay(remainingMs) {
+        const timeStr = formatTime(remainingMs);
+        const progress = Math.max(0, Math.min(100, (remainingMs / totalDuration) * 100));
+
+        if (config.displayStyle === 'countdown') {
+          countdownTime.textContent = timeStr;
+        } else {
+          progressFill.style.width = `${progress}%`;
+          progressTime.textContent = `${timeStr} remaining`;
+        }
+      }
+
+      // Show expired state
+      function showExpired() {
+        clearInterval(timerInterval);
+        timerContainer.style.display = 'none';
+        timerExpired.style.display = 'block';
+        
+        // Remove discount code from cart
+        removeDiscount();
+      }
+
+      // Start timer
+      function startTimer(expiresAt) {
+        endTime = new Date(expiresAt).getTime();
+        
+        // Show widget
+        widget.style.display = 'block';
+        discountAmount.textContent = `${config.discountPercent}%`;
+
+        // Show correct display style
+        if (config.displayStyle === 'countdown') {
+          countdownContainer.style.display = 'flex';
+          progressContainer.style.display = 'none';
+        } else {
+          progressContainer.style.display = 'flex';
+          countdownContainer.style.display = 'none';
+        }
+
+        // Update every second
+        function tick() {
+          const now = Date.now();
+          const remaining = endTime - now;
+
+          if (remaining <= 0) {
+            showExpired();
+            return;
+          }
+
+          updateDisplay(remaining);
+        }
+
+        tick();
+        timerInterval = setInterval(tick, 1000);
+      }
+
+      // Initialize timer session with backend
+      async function initializeTimer() {
+        const cartToken = getCartToken();
+        if (!cartToken) {
+          console.log('Cart Timer: No cart token found');
+          return;
+        }
+
+        try {
+          const response = await fetch(`${config.appUrl}/api/timer/start`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              shop: config.shop,
+              cartToken: cartToken
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to start timer');
+          }
+
+          const data = await response.json();
+          
+          if (data.expired) {
+            showExpired();
+            return;
+          }
+
+          if (data.expiresAt) {
+            totalDuration = config.timerMinutes * 60 * 1000;
+            startTimer(data.expiresAt);
+            
+            // Apply discount code if provided
+            if (data.discountCode) {
+              applyDiscount(data.discountCode);
+            }
+          }
+        } catch (error) {
+          console.error('Cart Timer Error:', error);
+          // Fallback to local timer
+          const localExpiry = localStorage.getItem(`timer_${config.shop}`);
+          if (localExpiry && new Date(localExpiry) > new Date()) {
+            startTimer(localExpiry);
+          } else {
+            const newExpiry = new Date(Date.now() + totalDuration).toISOString();
+            localStorage.setItem(`timer_${config.shop}`, newExpiry);
+            startTimer(newExpiry);
+          }
+        }
+      }
+
+      // Apply discount to cart
+      async function applyDiscount(code) {
+        try {
+          await fetch('/cart/update.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ discount: code })
+          });
+        } catch (e) {
+          console.log('Cart Timer: Could not auto-apply discount');
+        }
+      }
+
+      // Remove discount from cart
+      async function removeDiscount() {
+        try {
+          await fetch('/discount/remove', { method: 'POST' });
+        } catch (e) {
+          console.log('Cart Timer: Could not remove discount');
+        }
+      }
+
+      // Close handler
+      closeBtn.addEventListener('click', function() {
+        widget.classList.add('hidden');
+        sessionStorage.setItem('timer_hidden', 'true');
+      });
+
+      // Restart handler
+      restartBtn.addEventListener('click', async function() {
+        localStorage.removeItem(`timer_${config.shop}`);
+        timerContainer.style.display = 'flex';
+        timerExpired.style.display = 'none';
+        
+        // Request new timer from backend
+        const cartToken = getCartToken();
+        if (cartToken) {
+          try {
+            await fetch(`${config.appUrl}/api/timer/restart`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ shop: config.shop, cartToken })
+            });
+          } catch (e) {}
+        }
+        
+        const newExpiry = new Date(Date.now() + totalDuration).toISOString();
+        startTimer(newExpiry);
+      });
+
+      // Don't show if user closed it this session
+      if (sessionStorage.getItem('timer_hidden') === 'true') {
+        return;
+      }
+
+      // Initialize
+      initializeTimer();
+    })();
+  </script>
+{% else %}
+  <!-- Cart Timer: Campaign not enabled -->
+{% endif %}
+
+{% schema %}
+{
+  "name": "Cart Timer Discount",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["cart"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Configure your timer settings in the Cart Timer app dashboard."
+    }
+  ]
+}
+{% endschema %}
