@@ -1,13 +1,26 @@
 {% comment %}
-  Cart Timer — App Embed
-  Fetches settings via App Proxy → always current from database
+  Cart Timer — Real price modification + auto-apply discount to cart
 {% endcomment %}
 
 <script>
 (function () {
   'use strict';
 
-  var SHOP = {{ shop.permanent_domain | json }};
+  var SHOP     = {{ shop.permanent_domain | json }};
+   var CURRENCY = {{ cart.currency.iso_code | default: shop.currency | json }};
+  var PROXY    = '/apps/timer';
+
+  /* ==========================================================
+     VISITOR ID
+     ========================================================== */
+  function getVid() {
+    var k = 'ct_vid', v = localStorage.getItem(k);
+    if (v) return v;
+    v = 'v_' + Math.random().toString(36).substr(2, 12) + Date.now().toString(36);
+    localStorage.setItem(k, v);
+    document.cookie = 'ct_vid=' + v + ';path=/;max-age=31536000;SameSite=Lax';
+    return v;
+  }
 
   /* ==========================================================
      HELPERS
@@ -19,156 +32,262 @@
         || window.location.pathname.indexOf('/products/') > -1;
   }
 
-  /* ==========================================================
-     FETCH SETTINGS FROM APP PROXY
-     ========================================================== */
-  function fetchSettings() {
-    return fetch('/apps/timer?shop=' + encodeURIComponent(SHOP), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    })
-    .then(function(res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.json();
-    })
-    .then(function(data) {
-      console.log('%c[CartTimer] ✅ Settings from API:', 'color: #10b981; font-weight: bold;', data);
-      return data;
-    })
-    .catch(function(err) {
-      console.warn('[CartTimer] ⚠️ Could not fetch settings, using defaults:', err.message);
-      return null;
-    });
+  function formatMoney(cents) {
+    var amount = Math.round(cents) / 100;
+    try {
+      return new Intl.NumberFormat(navigator.language || 'en-US', {
+        style: 'currency',
+        currency: CURRENCY
+      }).format(amount);
+    } catch(e) {
+      var symbols = {
+        USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$',
+        JPY:'¥', INR:'₹', BRL:'R$', MXN:'MX$', CHF:'CHF',
+        MAD:'MAD', TRY:'₺', SEK:'kr', NOK:'kr', DKK:'kr'
+      };
+      return (symbols[CURRENCY] || CURRENCY + ' ') + amount.toFixed(2);
+    }
+  }
+
+  function api(action, vid) {
+    var url = PROXY + '?action=' + action + '&shop=' + encodeURIComponent(SHOP);
+    if (vid) url += '&vid=' + encodeURIComponent(vid);
+    return fetch(url).then(function(r) { return r.json(); });
+  }
+
+  function getProduct() {
+    var path = window.location.pathname;
+    if (path.indexOf('/products/') === -1) return Promise.resolve(null);
+    return fetch(path + '.js').then(function(r) { return r.json(); }).catch(function() { return null; });
   }
 
   /* ==========================================================
-     CSS INJECTION
+     MODIFY REAL PRODUCT PRICE ON PAGE
+     ========================================================== */
+  var originalPriceHTML = null;
+  var priceContainer = null;
+
+  function findPriceContainer() {
+    var selectors = [
+      '.price__container',
+      '.price',
+      '.product__price',
+      '.product-price',
+      '[data-product-price]',
+      '.ProductMeta__Price',
+      '.product-single__price',
+      '.price-list',
+      '.product__info-container .price'
+    ];
+    for (var i = 0; i < selectors.length; i++) {
+      var el = document.querySelector(selectors[i]);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function modifyPrice(product, discountPct, accentColor) {
+    if (!product) return;
+
+    priceContainer = findPriceContainer();
+    if (!priceContainer) {
+      console.log('[CartTimer] Price container not found');
+      return;
+    }
+
+    /* Save original */
+    originalPriceHTML = priceContainer.innerHTML;
+
+    var priceCents = product.price;
+    var discountedCents = Math.round(priceCents * (1 - discountPct / 100));
+    var originalFormatted = formatMoney(priceCents);
+    var discountedFormatted = formatMoney(discountedCents);
+
+    /* Build new price HTML */
+    var html = '<div class="ct-price-mod" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<span style="font-size:inherit;color:#94a3b8;text-decoration:line-through;font-weight:400;">' + originalFormatted + '</span>' +
+      '<span style="font-size:1.3em;color:' + accentColor + ';font-weight:800;">' + discountedFormatted + '</span>' +
+      '<span style="font-size:0.7em;font-weight:700;color:' + accentColor + ';background:' + accentColor + '15;padding:3px 8px;border-radius:20px;">-' + discountPct + '%</span>' +
+    '</div>';
+
+    priceContainer.innerHTML = html;
+    console.log('[CartTimer] ✅ Price modified:', originalFormatted, '→', discountedFormatted);
+  }
+
+  function restorePrice() {
+    if (priceContainer && originalPriceHTML) {
+      priceContainer.innerHTML = originalPriceHTML;
+      console.log('[CartTimer] Price restored to original');
+    }
+  }
+
+  /* ==========================================================
+     APPLY DISCOUNT CODE TO CART
+     ========================================================== */
+  var discountApplied = false;
+
+  function applyDiscount(code) {
+    if (!code || discountApplied) return;
+
+    /* Use Shopify's /discount/CODE endpoint */
+    fetch('/discount/' + encodeURIComponent(code), {
+      method: 'GET',
+      redirect: 'manual'
+    }).then(function() {
+      discountApplied = true;
+      console.log('[CartTimer] ✅ Discount code applied:', code);
+    }).catch(function(err) {
+      console.log('[CartTimer] Discount apply attempt:', err.message);
+      discountApplied = true; /* May have worked via redirect */
+    });
+  }
+
+  function interceptAddToCart(code) {
+    if (!code) return;
+
+    var forms = document.querySelectorAll('form[action*="/cart/add"]');
+    forms.forEach(function(form) {
+      if (form.dataset.ctIntercepted) return;
+      form.dataset.ctIntercepted = 'true';
+
+      form.addEventListener('submit', function() {
+        /* Apply discount after a short delay to let add-to-cart complete */
+        setTimeout(function() {
+          applyDiscount(code);
+        }, 500);
+      });
+
+      /* Also intercept AJAX add-to-cart buttons */
+      var buttons = form.querySelectorAll('[type="submit"], button[name="add"], .product-form__submit');
+      buttons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          setTimeout(function() {
+            applyDiscount(code);
+          }, 800);
+        });
+      });
+    });
+
+    console.log('[CartTimer] 🛒 Intercepting', forms.length, 'add-to-cart forms');
+  }
+
+  /* ==========================================================
+     CSS
      ========================================================== */
   function injectCSS(accent) {
-    if (document.getElementById('pdt-css')) return;
+    if (document.getElementById('ct-css')) return;
     var el = document.createElement('style');
-    el.id = 'pdt-css';
+    el.id = 'ct-css';
     el.textContent = '\
-.pdt{--a:' + accent + ';font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;border-radius:14px;padding:20px 24px 18px;margin:20px 0 16px;position:relative;overflow:hidden;animation:pdtIn .5s ease-out;box-sizing:border-box}\
-.pdt *,.pdt *::before,.pdt *::after{box-sizing:border-box}\
-@keyframes pdtIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}\
+.ct-wrap{width:100%;box-sizing:border-box;margin:0 0 16px}\
+.ct{--a:' + accent + ';font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;border-radius:14px;padding:18px 20px 16px;position:relative;overflow:hidden;animation:ctIn .4s ease-out;box-sizing:border-box;width:100%}\
+.ct *{box-sizing:border-box;margin:0}\
+@keyframes ctIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\
 \
-.pdt-dark{background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 8px 30px rgba(0,0,0,.25)}\
-.pdt-dark .ph{color:#f1f5f9}.pdt-dark .pn{color:#fff}.pdt-dark .pl{color:rgba(255,255,255,.5)}\
-.pdt-dark .ps{color:rgba(255,255,255,.3)}.pdt-dark .pu{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}\
-.pdt-dark .ptr{background:rgba(255,255,255,.1)}.pdt-dark .pfl{background:var(--a)}\
-.pdt-dark .pft{color:rgba(255,255,255,.5)}.pdt-dark .plk{color:var(--a)}\
-.pdt-dark .pe{background:rgba(15,23,42,.92)}.pdt-dark .pem{color:rgba(255,255,255,.6)}\
+.ct-dark{background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 6px 24px rgba(0,0,0,.2)}\
+.ct-dark .ct-hl{color:#f1f5f9}.ct-dark .ct-n{color:#fff}.ct-dark .ct-lb{color:rgba(255,255,255,.45)}\
+.ct-dark .ct-sp{color:rgba(255,255,255,.25)}.ct-dark .ct-u{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}\
+.ct-dark .ct-tk{background:rgba(255,255,255,.1)}.ct-dark .ct-fl{background:var(--a)}\
+.ct-dark .ct-ft{color:rgba(255,255,255,.45)}\
+.ct-dark .ct-ex{background:rgba(15,23,42,.94)}.ct-dark .ct-em{color:rgba(255,255,255,.6)}\
+.ct-dark .ct-cd-msg{color:rgba(255,255,255,.5)}\
 \
-.pdt-gradient{background:linear-gradient(135deg,var(--a),#0f172a);box-shadow:0 8px 30px rgba(0,0,0,.2)}\
-.pdt-gradient .ph{color:#fff}.pdt-gradient .pn{color:#fff}.pdt-gradient .pl{color:rgba(255,255,255,.6)}\
-.pdt-gradient .ps{color:rgba(255,255,255,.35)}.pdt-gradient .pu{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15)}\
-.pdt-gradient .ptr{background:rgba(255,255,255,.15)}.pdt-gradient .pfl{background:#fff}\
-.pdt-gradient .pft{color:rgba(255,255,255,.6)}.pdt-gradient .plk{color:rgba(255,255,255,.8)}\
-.pdt-gradient .pe{background:rgba(15,23,42,.92)}.pdt-gradient .pem{color:rgba(255,255,255,.7)}\
+.ct-gradient{background:linear-gradient(135deg,var(--a),#0f172a);box-shadow:0 6px 24px rgba(0,0,0,.18)}\
+.ct-gradient .ct-hl{color:#fff}.ct-gradient .ct-n{color:#fff}.ct-gradient .ct-lb{color:rgba(255,255,255,.55)}\
+.ct-gradient .ct-sp{color:rgba(255,255,255,.3)}.ct-gradient .ct-u{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}\
+.ct-gradient .ct-tk{background:rgba(255,255,255,.15)}.ct-gradient .ct-fl{background:#fff}\
+.ct-gradient .ct-ft{color:rgba(255,255,255,.55)}\
+.ct-gradient .ct-ex{background:rgba(15,23,42,.94)}.ct-gradient .ct-em{color:rgba(255,255,255,.7)}\
+.ct-gradient .ct-cd-msg{color:rgba(255,255,255,.6)}\
 \
-.pdt-light{background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,.06)}\
-.pdt-light .ph{color:#1e293b}.pdt-light .pn{color:#0f172a}.pdt-light .pl{color:#94a3b8}\
-.pdt-light .ps{color:#cbd5e1}.pdt-light .pu{background:#f8fafc;border:1px solid #e2e8f0}\
-.pdt-light .ptr{background:#e2e8f0}.pdt-light .pfl{background:var(--a)}\
-.pdt-light .pft{color:#64748b}.pdt-light .plk{color:var(--a)}\
-.pdt-light .pe{background:rgba(255,255,255,.92)}.pdt-light .pem{color:#64748b}\
+.ct-light{background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 16px rgba(0,0,0,.05)}\
+.ct-light .ct-hl{color:#1e293b}.ct-light .ct-n{color:#0f172a}.ct-light .ct-lb{color:#94a3b8}\
+.ct-light .ct-sp{color:#cbd5e1}.ct-light .ct-u{background:#f8fafc;border-color:#e2e8f0}\
+.ct-light .ct-tk{background:#e2e8f0}.ct-light .ct-fl{background:var(--a)}\
+.ct-light .ct-ft{color:#64748b}\
+.ct-light .ct-ex{background:rgba(255,255,255,.94)}.ct-light .ct-em{color:#64748b}\
+.ct-light .ct-cd-msg{color:#94a3b8}\
 \
-.pd-hdr{display:flex;align-items:center;gap:8px;margin-bottom:16px}\
-.pd-fire{font-size:18px;line-height:1}\
-.ph{font-size:15px;font-weight:700;letter-spacing:-.2px}\
+.ct-hdr{display:flex;align-items:center;gap:8px;margin-bottom:14px}\
+.ct-fire{font-size:17px;line-height:1}\
+.ct-hl{font-size:14px;font-weight:700;letter-spacing:-.2px}\
 \
-.pd-cd{display:flex;align-items:flex-start;justify-content:center;gap:8px;margin-bottom:16px}\
-.pu{display:flex;flex-direction:column;align-items:center;border-radius:12px;padding:14px 18px 10px;min-width:72px;transition:transform .2s}\
-.pn{font-size:36px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-1px}\
-.pl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-top:6px}\
-.ps{font-size:30px;font-weight:700;padding-top:12px;line-height:1;animation:pblink 1s step-end infinite}\
-@keyframes pblink{0%,100%{opacity:1}50%{opacity:.25}}\
+.ct-cd{display:flex;align-items:flex-start;justify-content:center;gap:6px;margin-bottom:14px}\
+.ct-u{display:flex;flex-direction:column;align-items:center;border-radius:10px;padding:10px 14px 7px;min-width:60px;border:1px solid transparent;transition:transform .2s}\
+.ct-n{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.5px}\
+.ct-lb{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-top:5px}\
+.ct-sp{font-size:24px;font-weight:700;padding-top:8px;line-height:1;animation:ctBlink 1s step-end infinite}\
+@keyframes ctBlink{0%,100%{opacity:1}50%{opacity:.2}}\
 \
-.pd-pg{margin-bottom:14px}.ptr{height:5px;border-radius:3px;overflow:hidden}\
-.pfl{height:100%;border-radius:3px;width:100%;transition:width 1s linear}\
+.ct-pg{margin-bottom:12px}.ct-tk{height:4px;border-radius:2px;overflow:hidden}\
+.ct-fl{height:100%;border-radius:2px;width:100%;transition:width 1s linear}\
 \
-.pd-ft{display:flex;align-items:center;justify-content:center;gap:6px}\
-.pft{font-size:12px;font-weight:500}\
-.plk{flex-shrink:0}\
+.ct-ft{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;font-weight:500}\
 \
-.pe{display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2}\
-.pe.show{display:flex;align-items:center;justify-content:center;animation:pdtIn .3s ease-out}\
-.pe-in{text-align:center;padding:20px}\
-.pe-ico{font-size:28px;display:block;margin-bottom:8px}\
-.pem{font-size:14px;font-weight:500;margin:0 0 14px}\
-.pe-btn{display:inline-flex;align-items:center;gap:6px;background:var(--a);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .15s}\
-.pe-btn:hover{opacity:.9;transform:translateY(-1px)}\
+.ct-ex{display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2}\
+.ct-ex.show{display:flex;flex-direction:column;align-items:center;justify-content:center;animation:ctIn .3s ease-out}\
+.ct-eico{font-size:26px;margin-bottom:6px}\
+.ct-em{font-size:14px;font-weight:600;margin-bottom:4px}\
+.ct-cd-msg{font-size:12px;margin-bottom:12px}\
+.ct-rb{background:var(--a);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}\
+.ct-rb:disabled{opacity:.5;cursor:default}\
 \
-.pdt.urgent .pu{animation:ppulse 1s ease-in-out infinite}\
-.pdt.urgent .pfl{animation:bpulse 1s ease-in-out infinite}\
-@keyframes ppulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\
-@keyframes bpulse{0%,100%{opacity:1}50%{opacity:.6}}\
+.ct.urgent .ct-u{animation:ctPulse 1s ease-in-out infinite}\
+@keyframes ctPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}\
 \
 @media(max-width:480px){\
-.pdt{padding:16px 16px 14px;border-radius:12px;margin:14px 0}\
-.pd-cd{gap:5px}.pu{min-width:58px;padding:10px 12px 8px;border-radius:10px}\
-.pn{font-size:28px}.ps{font-size:24px;padding-top:8px}.pl{font-size:9px}.ph{font-size:13px}\
+.ct{padding:16px 14px 14px;border-radius:12px}\
+.ct-cd{gap:4px}.ct-u{min-width:50px;padding:8px 10px 6px}\
+.ct-n{font-size:24px}.ct-sp{font-size:20px;padding-top:6px}.ct-lb{font-size:8px}\
+.ct-hl{font-size:13px}\
 }';
     document.head.appendChild(el);
   }
 
   /* ==========================================================
-     BUILD TIMER HTML
+     BUILD TIMER HTML (no price inside — price is on the page)
      ========================================================== */
   function buildHTML(cfg) {
-    return '<div id="pdt-timer" class="pdt pdt-' + cfg.style + '" style="--a:' + cfg.color + ';">' +
-      '<div class="pd-hdr">' +
-        '<span class="pd-fire">🔥</span>' +
-        '<span class="ph">' + cfg.headline + '</span>' +
+    return '<div class="ct-wrap"><div id="ct-timer" class="ct ct-' + cfg.style + '" style="--a:' + cfg.color + ';">' +
+      '<div class="ct-hdr"><span class="ct-fire">🔥</span><span class="ct-hl">' + cfg.headline + '</span></div>' +
+      '<div class="ct-cd">' +
+        '<div class="ct-u"><span class="ct-n" id="ct-h">00</span><span class="ct-lb">Hours</span></div>' +
+        '<span class="ct-sp">:</span>' +
+        '<div class="ct-u"><span class="ct-n" id="ct-m">' + pad(cfg.minutes) + '</span><span class="ct-lb">Mins</span></div>' +
+        '<span class="ct-sp">:</span>' +
+        '<div class="ct-u"><span class="ct-n" id="ct-s">00</span><span class="ct-lb">Secs</span></div>' +
       '</div>' +
-      '<div class="pd-cd">' +
-        '<div class="pu"><span class="pn" id="pd-h">00</span><span class="pl">Hours</span></div>' +
-        '<span class="ps">:</span>' +
-        '<div class="pu"><span class="pn" id="pd-m">' + pad(cfg.minutes) + '</span><span class="pl">Mins</span></div>' +
-        '<span class="ps">:</span>' +
-        '<div class="pu"><span class="pn" id="pd-s">00</span><span class="pl">Secs</span></div>' +
+      '<div class="ct-pg"><div class="ct-tk"><div class="ct-fl" id="ct-f"></div></div></div>' +
+      '<div class="ct-ft">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+        '<span>' + cfg.footer + '</span>' +
       '</div>' +
-      '<div class="pd-pg"><div class="ptr"><div class="pfl" id="pd-f"></div></div></div>' +
-      '<div class="pd-ft">' +
-        '<svg class="plk" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-        '<span class="pft">' + cfg.discount + '% off — ' + cfg.footer + '</span>' +
+      '<div id="ct-ex" class="ct-ex">' +
+        '<span class="ct-eico">⏰</span>' +
+        '<p class="ct-em">Offer expired</p>' +
+        '<p class="ct-cd-msg" id="ct-cd-msg"></p>' +
+        '<button id="ct-rb" class="ct-rb" disabled>Come back later</button>' +
       '</div>' +
-      '<div id="pd-exp" class="pe">' +
-        '<div class="pe-in">' +
-          '<span class="pe-ico">⏰</span>' +
-          '<p class="pem">This offer has expired</p>' +
-          '<button id="pd-rst" class="pe-btn">Get a new offer</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
+    '</div></div>';
   }
 
   /* ==========================================================
      TIMER ENGINE
      ========================================================== */
-  var interval = null;
-  var endTime = 0;
-  var totalMs = 0;
-  var timerKey = '';
+  var interval = null, endTime = 0, totalMs = 0, VID = '';
 
   function tick() {
-    var h = document.getElementById('pd-h');
-    var m = document.getElementById('pd-m');
-    var s = document.getElementById('pd-s');
-    var f = document.getElementById('pd-f');
-    var e = document.getElementById('pd-exp');
-    var t = document.getElementById('pdt-timer');
+    var h = document.getElementById('ct-h'), m = document.getElementById('ct-m'),
+        s = document.getElementById('ct-s'), f = document.getElementById('ct-f'),
+        t = document.getElementById('ct-timer');
     if (!h) return;
 
     var left = endTime - Date.now();
     if (left <= 0) {
       clearInterval(interval);
-      h.textContent = '00'; m.textContent = '00'; s.textContent = '00';
-      f.style.width = '0%';
-      e.classList.add('show');
+      h.textContent='00'; m.textContent='00'; s.textContent='00'; f.style.width='0%';
       t.classList.remove('urgent');
-      localStorage.removeItem(timerKey);
+      onExpire();
       return;
     }
 
@@ -177,89 +296,107 @@
     m.textContent = pad(Math.floor((sec % 3600) / 60));
     s.textContent = pad(sec % 60);
     f.style.width = Math.max(0, (left / totalMs) * 100) + '%';
-
-    if (sec <= 30) t.classList.add('urgent');
-    else t.classList.remove('urgent');
+    if (sec <= 30) t.classList.add('urgent'); else t.classList.remove('urgent');
   }
 
-  function startTimer(exp) {
-    endTime = new Date(exp).getTime();
-    var e = document.getElementById('pd-exp');
-    if (e) e.classList.remove('show');
-    tick();
-    clearInterval(interval);
-    interval = setInterval(tick, 1000);
-  }
-
-  function createTimer() {
-    var exp = new Date(Date.now() + totalMs).toISOString();
-    localStorage.setItem(timerKey, exp);
-    startTimer(exp);
+  function startCountdown(expiresAt, mins) {
+    endTime = new Date(expiresAt).getTime();
+    totalMs = mins * 60 * 1000;
+    tick(); clearInterval(interval); interval = setInterval(tick, 1000);
   }
 
   /* ==========================================================
-     FIND ADD-TO-CART BUTTON
+     EXPIRE HANDLER
+     ========================================================== */
+  function onExpire() {
+    /* Tell server */
+    api('expire', VID).then(function(data) {
+      showExpired(data.cooldownUntil);
+    }).catch(function() {
+      showExpired(null);
+    });
+
+    /* Restore original price */
+    restorePrice();
+  }
+
+  function showExpired(cooldownUntil) {
+    var ex = document.getElementById('ct-ex');
+    var msg = document.getElementById('ct-cd-msg');
+    var btn = document.getElementById('ct-rb');
+    if (!ex) return;
+    ex.classList.add('show');
+
+    if (cooldownUntil) {
+      var cdEnd = new Date(cooldownUntil).getTime();
+      btn.disabled = true; btn.textContent = 'Come back later';
+      function upd() {
+        var left = cdEnd - Date.now();
+        if (left <= 0) { msg.textContent='New offer ready!'; btn.disabled=false; btn.textContent='🎉 Get new discount'; return; }
+        var hrs = Math.floor(left/3600000), mins = Math.floor((left%3600000)/60000);
+        msg.textContent = 'New discount in ' + hrs + 'h ' + mins + 'm';
+      }
+      upd(); setInterval(upd, 60000);
+    }
+
+    btn.onclick = function() {
+      if (btn.disabled) return;
+      ex.classList.remove('show');
+      startNewTimer();
+    };
+  }
+
+  function startNewTimer() {
+    api('start', VID).then(function(data) {
+      if (data.status === 'active') {
+        startCountdown(data.expiresAt, data.timerMinutes);
+        if (data.discountCode) {
+          applyDiscount(data.discountCode);
+          discountApplied = false;
+        }
+        /* Re-modify price */
+        getProduct().then(function(p) {
+          if (p) modifyPrice(p, data.discountPct, document.getElementById('ct-timer')?.style.getPropertyValue('--a') || '#6366f1');
+        });
+      } else if (data.status === 'cooldown') {
+        showExpired(data.cooldownUntil);
+      }
+    });
+  }
+
+  /* ==========================================================
+     INJECT
      ========================================================== */
   function findTarget() {
-    var sels = [
-      '.product-form__buttons',
-      '.product-form__submit',
-      '.product__submit',
-      'form[action*="/cart/add"] [type="submit"]',
-      '.shopify-payment-button',
-      'button[name="add"]',
-      '[data-add-to-cart]',
-      '#AddToCart',
-      '.add-to-cart',
-      'form[action*="/cart/add"]'
-    ];
-    for (var i = 0; i < sels.length; i++) {
-      var el = document.querySelector(sels[i]);
-      if (el) return el;
-    }
+    var sels = ['.product-form__buttons','.product-form__submit','.product__submit',
+      '.shopify-payment-button','form[action*="/cart/add"] [type="submit"]',
+      'button[name="add"]','[data-add-to-cart]','#AddToCart','.add-to-cart',
+      'form[action*="/cart/add"]'];
+    for (var i=0;i<sels.length;i++) { var el=document.querySelector(sels[i]); if(el) return el; }
     return null;
   }
 
-  /* ==========================================================
-     INJECT TIMER INTO PAGE
-     ========================================================== */
   function inject(cfg) {
-    if (document.getElementById('pdt-timer')) return;
-
+    if (document.getElementById('ct-timer')) return;
     var target = findTarget();
-    if (!target) {
-      console.log('[CartTimer] ⚠️ No Add to Cart button found');
-      return;
-    }
+    if (!target) return;
 
-    var parent = target.closest(
-      '.product-form__buttons, .product__submit, .product-form, form[action*="/cart/add"]'
-    ) || target;
+    var form = target.closest('form[action*="/cart/add"]');
+    var parent = form || target.parentElement;
 
     injectCSS(cfg.color);
-
     var wrap = document.createElement('div');
     wrap.innerHTML = buildHTML(cfg);
-    parent.parentNode.insertBefore(wrap.firstElementChild, parent);
+    var node = wrap.firstElementChild;
 
-    /* Wire restart */
-    document.getElementById('pd-rst').addEventListener('click', createTimer);
-
-    /* Resume or create */
-    var saved = localStorage.getItem(timerKey);
-    if (saved && new Date(saved) > new Date()) {
-      startTimer(saved);
-    } else if (saved) {
-      document.getElementById('pd-h').textContent = '00';
-      document.getElementById('pd-m').textContent = '00';
-      document.getElementById('pd-s').textContent = '00';
-      document.getElementById('pd-f').style.width = '0%';
-      document.getElementById('pd-exp').classList.add('show');
+    var btnGroup = parent.querySelector('.product-form__buttons')
+                || parent.querySelector('.shopify-payment-button')
+                || parent.querySelector('[type="submit"]');
+    if (btnGroup && btnGroup.parentElement === parent) {
+      parent.insertBefore(node, btnGroup);
     } else {
-      createTimer();
+      parent.insertBefore(node, parent.firstChild);
     }
-
-    console.log('[CartTimer] ✅ Timer injected with settings:', cfg);
   }
 
   /* ==========================================================
@@ -268,51 +405,69 @@
   function init() {
     if (!isProductPage()) return;
 
-    console.log('[CartTimer] 🔄 Fetching settings from API...');
+    VID = getVid();
 
-    fetchSettings().then(function(data) {
-      /* Build config — use API data or defaults */
+    Promise.all([api('settings', null), getProduct()])
+    .then(function(results) {
+      var settings = results[0];
+      var product = results[1];
+
+      if (!settings || settings.enabled === false) return;
+
       var cfg = {
-        style:    (data && data.timerStyle)      || 'dark',
-        minutes:  (data && data.timerMinutes)     || 10,
-        discount: (data && data.discountPercent)  || 15,
-        headline: (data && data.urgencyText)      || 'Hurry! This deal ends soon',
-        color:    (data && data.primaryColor)      || '#6366f1',
-        footer:   (data && data.footerText)        || 'Your discount is reserved for you'
+        style:    settings.timerStyle      || 'dark',
+        minutes:  settings.timerMinutes    || 10,
+        discount: settings.discountPercent || 15,
+        headline: settings.urgencyText     || 'Hurry! This deal ends soon',
+        color:    settings.primaryColor     || '#6366f1',
+        footer:   settings.footerText       || 'Your discount is reserved for you',
+        code:     settings.discountCode     || null
       };
 
-      /* If explicitly disabled, don't show */
-      if (data && data.enabled === false) {
-        console.log('[CartTimer] ⏸️ Campaign disabled');
-        return;
-      }
-
-      /* Set timer globals */
-      totalMs  = cfg.minutes * 60 * 1000;
-      timerKey = 'pdt_' + SHOP + '_' + cfg.minutes + '_' + cfg.discount;
-
-      /* Inject! */
+      /* 1. Inject timer widget */
       inject(cfg);
+
+      /* 2. Start/resume timer via server */
+      api('start', VID).then(function(data) {
+        if (data.status === 'active') {
+          var pct = data.discountPct || cfg.discount;
+
+          /* 3. Modify REAL price on the page */
+          if (product) modifyPrice(product, pct, cfg.color);
+
+          /* 4. Intercept add-to-cart to apply discount code */
+          var code = data.discountCode || cfg.code;
+          if (code) {
+            interceptAddToCart(code);
+            /* Pre-apply discount so it's ready when they add to cart */
+            applyDiscount(code);
+          }
+
+          /* 5. Start countdown */
+          startCountdown(data.expiresAt, data.timerMinutes || cfg.minutes);
+
+        } else if (data.status === 'cooldown') {
+          inject(cfg); /* Inject timer in expired state */
+          showExpired(data.cooldownUntil);
+        }
+      });
     });
   }
 
-  /* ==========================================================
-     START
-     ========================================================== */
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 100); });
   } else {
     setTimeout(init, 150);
   }
 
-  /* SPA support */
+  /* SPA */
   var origPush = history.pushState;
-  history.pushState = function () {
+  history.pushState = function() {
     origPush.apply(history, arguments);
-    setTimeout(function () { if (isProductPage()) init(); }, 500);
+    setTimeout(function() { if (isProductPage()) init(); }, 500);
   };
-  window.addEventListener('popstate', function () {
-    setTimeout(function () { if (isProductPage()) init(); }, 500);
+  window.addEventListener('popstate', function() {
+    setTimeout(function() { if (isProductPage()) init(); }, 500);
   });
 
 })();
@@ -325,7 +480,7 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "All timer settings are managed from the Cart Timer app dashboard. Save settings there and they will appear here automatically."
+      "content": "All settings including discount code are managed from the Cart Timer app dashboard."
     }
   ]
 }

@@ -1,117 +1,25 @@
 {% comment %}
   Cart Timer — Section Block (manual placement)
-  Also fetches settings via App Proxy
+  Uses same proxy API as embed
 {% endcomment %}
 
-<div id="pdt-block-root" data-shop="{{ shop.permanent_domain }}"></div>
+<div id="ct-block-root" data-shop="{{ shop.permanent_domain }}" data-currency="{{ shop.currency }}"></div>
 
 <script>
 (function(){
-  var root = document.getElementById('pdt-block-root');
+  var root = document.getElementById('ct-block-root');
   if (!root) return;
   var SHOP = root.dataset.shop;
+  var CURRENCY = root.dataset.currency;
 
-  function pad(n) { return (n < 10 ? '0' : '') + n; }
-
-  fetch('/apps/timer?shop=' + encodeURIComponent(SHOP))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data || data.enabled === false) {
-        root.style.display = 'none';
-        return;
-      }
-
-      var cfg = {
-        style:    data.timerStyle     || 'dark',
-        minutes:  data.timerMinutes   || 10,
-        discount: data.discountPercent || 15,
-        headline: data.urgencyText    || 'Hurry! This deal ends soon',
-        color:    data.primaryColor    || '#6366f1',
-        footer:   data.footerText      || 'Your discount is reserved for you'
-      };
-
-      var totalMs = cfg.minutes * 60 * 1000;
-      var KEY = 'pdt_' + SHOP + '_' + cfg.minutes;
-      var interval, endTime;
-
-      var themes = {
-        dark: 'background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 8px 30px rgba(0,0,0,.25);',
-        gradient: 'background:linear-gradient(135deg,' + cfg.color + ',#0f172a);box-shadow:0 8px 30px rgba(0,0,0,.2);',
-        light: 'background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,.06);'
-      };
-      var textColors = {
-        dark: { head: '#f1f5f9', num: '#fff', sub: 'rgba(255,255,255,.5)', sep: 'rgba(255,255,255,.3)', unitBg: 'rgba(255,255,255,.06)', unitBdr: 'rgba(255,255,255,.08)', track: 'rgba(255,255,255,.1)', fill: cfg.color, foot: 'rgba(255,255,255,.5)' },
-        gradient: { head: '#fff', num: '#fff', sub: 'rgba(255,255,255,.6)', sep: 'rgba(255,255,255,.35)', unitBg: 'rgba(255,255,255,.12)', unitBdr: 'rgba(255,255,255,.15)', track: 'rgba(255,255,255,.15)', fill: '#fff', foot: 'rgba(255,255,255,.6)' },
-        light: { head: '#1e293b', num: '#0f172a', sub: '#94a3b8', sep: '#cbd5e1', unitBg: '#f8fafc', unitBdr: '#e2e8f0', track: '#e2e8f0', fill: cfg.color, foot: '#64748b' }
-      };
-      var tc = textColors[cfg.style] || textColors.dark;
-
-      root.innerHTML = '<div style="' + (themes[cfg.style] || themes.dark) + 'border-radius:14px;padding:20px 24px 18px;margin:20px 0;font-family:-apple-system,sans-serif;position:relative;overflow:hidden;">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;"><span style="font-size:18px;">🔥</span><span style="font-size:15px;font-weight:700;color:' + tc.head + ';">' + cfg.headline + '</span></div>' +
-        '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px;margin-bottom:16px;">' +
-          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bh" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">00</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Hours</span></div>' +
-          '<span style="font-size:30px;font-weight:700;color:' + tc.sep + ';padding-top:12px;">:</span>' +
-          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bm" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">' + pad(cfg.minutes) + '</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Mins</span></div>' +
-          '<span style="font-size:30px;font-weight:700;color:' + tc.sep + ';padding-top:12px;">:</span>' +
-          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bs" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">00</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Secs</span></div>' +
-        '</div>' +
-        '<div style="margin-bottom:14px;"><div style="height:5px;border-radius:3px;overflow:hidden;background:' + tc.track + ';"><div id="bf" style="height:100%;border-radius:3px;width:100%;background:' + tc.fill + ';transition:width 1s linear;"></div></div></div>' +
-        '<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:500;color:' + tc.foot + ';">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-          cfg.discount + '% off — ' + cfg.footer +
-        '</div>' +
-        '<div id="bexp" style="display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);background:rgba(15,23,42,.92);z-index:2;align-items:center;justify-content:center;text-align:center;flex-direction:column;padding:20px;">' +
-          '<span style="font-size:28px;margin-bottom:8px;">⏰</span><p style="color:rgba(255,255,255,.6);margin:0 0 14px;font-size:14px;">This offer has expired</p>' +
-          '<button id="brst" style="background:' + cfg.color + ';color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Get a new offer</button>' +
-        '</div>' +
-      '</div>';
-
-      function tick() {
-        var left = endTime - Date.now();
-        if (left <= 0) {
-          clearInterval(interval);
-          document.getElementById('bh').textContent = '00';
-          document.getElementById('bm').textContent = '00';
-          document.getElementById('bs').textContent = '00';
-          document.getElementById('bf').style.width = '0%';
-          var exp = document.getElementById('bexp');
-          exp.style.display = 'flex';
-          localStorage.removeItem(KEY);
-          return;
-        }
-        var sec = Math.floor(left / 1000);
-        document.getElementById('bh').textContent = pad(Math.floor(sec / 3600));
-        document.getElementById('bm').textContent = pad(Math.floor((sec % 3600) / 60));
-        document.getElementById('bs').textContent = pad(sec % 60);
-        document.getElementById('bf').style.width = Math.max(0, (left / totalMs) * 100) + '%';
-      }
-
-      function start(exp) {
-        endTime = new Date(exp).getTime();
-        var el = document.getElementById('bexp');
-        if (el) el.style.display = 'none';
-        tick(); clearInterval(interval); interval = setInterval(tick, 1000);
-      }
-
-      function create() {
-        var exp = new Date(Date.now() + totalMs).toISOString();
-        localStorage.setItem(KEY, exp); start(exp);
-      }
-
-      document.getElementById('brst').addEventListener('click', create);
-
-      var saved = localStorage.getItem(KEY);
-      if (saved && new Date(saved) > new Date()) { start(saved); }
-      else if (saved) {
-        document.getElementById('bh').textContent = '00';
-        document.getElementById('bm').textContent = '00';
-        document.getElementById('bs').textContent = '00';
-        document.getElementById('bf').style.width = '0%';
-        document.getElementById('bexp').style.display = 'flex';
-      } else { create(); }
+  fetch('/apps/timer?action=settings&shop=' + encodeURIComponent(SHOP))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data || data.enabled === false) { root.style.display='none'; return; }
+      root.innerHTML = '<p style="text-align:center;padding:20px;color:#64748b;font-family:system-ui;font-size:13px;">✅ Timer active — use the App Embed version for automatic placement near Add to Cart button.</p>';
     })
-    .catch(function(err) {
-      console.warn('[CartTimer] Block error:', err);
+    .catch(function(){
+      root.style.display = 'none';
     });
 })();
 </script>
@@ -126,7 +34,7 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "All settings are controlled from the Cart Timer app dashboard."
+      "content": "For best results, use the App Embed version (⏱️ Cart Timer Auto) which automatically positions near the Add to Cart button."
     }
   ]
 }
