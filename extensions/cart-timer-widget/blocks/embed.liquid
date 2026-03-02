@@ -7,11 +7,11 @@
   'use strict';
 
   var SHOP     = {{ shop.permanent_domain | json }};
-   var CURRENCY = {{ cart.currency.iso_code | default: shop.currency | json }};
+  var CURRENCY = {{ cart.currency.iso_code | default: shop.currency | json }};
   var PROXY    = '/apps/timer';
 
   /* ==========================================================
-     VISITOR ID
+     VISITOR ID (unchanged)
      ========================================================== */
   function getVid() {
     var k = 'ct_vid', v = localStorage.getItem(k);
@@ -23,7 +23,7 @@
   }
 
   /* ==========================================================
-     HELPERS
+     HELPERS (unchanged)
      ========================================================== */
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -62,7 +62,7 @@
   }
 
   /* ==========================================================
-     MODIFY REAL PRODUCT PRICE ON PAGE
+     MODIFY REAL PRODUCT PRICE ON PAGE (unchanged)
      ========================================================== */
   var originalPriceHTML = null;
   var priceContainer = null;
@@ -95,7 +95,6 @@
       return;
     }
 
-    /* Save original */
     originalPriceHTML = priceContainer.innerHTML;
 
     var priceCents = product.price;
@@ -103,7 +102,6 @@
     var originalFormatted = formatMoney(priceCents);
     var discountedFormatted = formatMoney(discountedCents);
 
-    /* Build new price HTML */
     var html = '<div class="ct-price-mod" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
       '<span style="font-size:inherit;color:#94a3b8;text-decoration:line-through;font-weight:400;">' + originalFormatted + '</span>' +
       '<span style="font-size:1.3em;color:' + accentColor + ';font-weight:800;">' + discountedFormatted + '</span>' +
@@ -122,14 +120,13 @@
   }
 
   /* ==========================================================
-     APPLY DISCOUNT CODE TO CART
+     APPLY DISCOUNT CODE TO CART (unchanged)
      ========================================================== */
   var discountApplied = false;
 
   function applyDiscount(code) {
     if (!code || discountApplied) return;
 
-    /* Use Shopify's /discount/CODE endpoint */
     fetch('/discount/' + encodeURIComponent(code), {
       method: 'GET',
       redirect: 'manual'
@@ -138,7 +135,7 @@
       console.log('[CartTimer] ✅ Discount code applied:', code);
     }).catch(function(err) {
       console.log('[CartTimer] Discount apply attempt:', err.message);
-      discountApplied = true; /* May have worked via redirect */
+      discountApplied = true;
     });
   }
 
@@ -151,13 +148,11 @@
       form.dataset.ctIntercepted = 'true';
 
       form.addEventListener('submit', function() {
-        /* Apply discount after a short delay to let add-to-cart complete */
         setTimeout(function() {
           applyDiscount(code);
         }, 500);
       });
 
-      /* Also intercept AJAX add-to-cart buttons */
       var buttons = form.querySelectorAll('[type="submit"], button[name="add"], .product-form__submit');
       buttons.forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -172,7 +167,7 @@
   }
 
   /* ==========================================================
-     CSS
+     CSS — UPDATED: new expired banner styles added at the end
      ========================================================== */
   function injectCSS(accent) {
     if (document.getElementById('ct-css')) return;
@@ -189,24 +184,18 @@
 .ct-dark .ct-sp{color:rgba(255,255,255,.25)}.ct-dark .ct-u{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}\
 .ct-dark .ct-tk{background:rgba(255,255,255,.1)}.ct-dark .ct-fl{background:var(--a)}\
 .ct-dark .ct-ft{color:rgba(255,255,255,.45)}\
-.ct-dark .ct-ex{background:rgba(15,23,42,.94)}.ct-dark .ct-em{color:rgba(255,255,255,.6)}\
-.ct-dark .ct-cd-msg{color:rgba(255,255,255,.5)}\
 \
 .ct-gradient{background:linear-gradient(135deg,var(--a),#0f172a);box-shadow:0 6px 24px rgba(0,0,0,.18)}\
 .ct-gradient .ct-hl{color:#fff}.ct-gradient .ct-n{color:#fff}.ct-gradient .ct-lb{color:rgba(255,255,255,.55)}\
 .ct-gradient .ct-sp{color:rgba(255,255,255,.3)}.ct-gradient .ct-u{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}\
 .ct-gradient .ct-tk{background:rgba(255,255,255,.15)}.ct-gradient .ct-fl{background:#fff}\
 .ct-gradient .ct-ft{color:rgba(255,255,255,.55)}\
-.ct-gradient .ct-ex{background:rgba(15,23,42,.94)}.ct-gradient .ct-em{color:rgba(255,255,255,.7)}\
-.ct-gradient .ct-cd-msg{color:rgba(255,255,255,.6)}\
 \
 .ct-light{background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 16px rgba(0,0,0,.05)}\
 .ct-light .ct-hl{color:#1e293b}.ct-light .ct-n{color:#0f172a}.ct-light .ct-lb{color:#94a3b8}\
 .ct-light .ct-sp{color:#cbd5e1}.ct-light .ct-u{background:#f8fafc;border-color:#e2e8f0}\
 .ct-light .ct-tk{background:#e2e8f0}.ct-light .ct-fl{background:var(--a)}\
 .ct-light .ct-ft{color:#64748b}\
-.ct-light .ct-ex{background:rgba(255,255,255,.94)}.ct-light .ct-em{color:#64748b}\
-.ct-light .ct-cd-msg{color:#94a3b8}\
 \
 .ct-hdr{display:flex;align-items:center;gap:8px;margin-bottom:14px}\
 .ct-fire{font-size:17px;line-height:1}\
@@ -224,28 +213,42 @@
 \
 .ct-ft{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;font-weight:500}\
 \
-.ct-ex{display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2}\
-.ct-ex.show{display:flex;flex-direction:column;align-items:center;justify-content:center;animation:ctIn .3s ease-out}\
-.ct-eico{font-size:26px;margin-bottom:6px}\
-.ct-em{font-size:14px;font-weight:600;margin-bottom:4px}\
-.ct-cd-msg{font-size:12px;margin-bottom:12px}\
-.ct-rb{background:var(--a);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}\
-.ct-rb:disabled{opacity:.5;cursor:default}\
-\
 .ct.urgent .ct-u{animation:ctPulse 1s ease-in-out infinite}\
 @keyframes ctPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}\
+\
+.ct-expired-wrap{display:none;width:100%;box-sizing:border-box;margin:0 0 16px}\
+.ct-expired-wrap.show{display:block;animation:ctIn .4s ease-out}\
+.ct-bn{border-radius:16px;padding:24px 28px;display:flex;align-items:center;gap:16px;position:relative;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}\
+.ct-bn-icon{flex-shrink:0;width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center}\
+.ct-bn-body{flex:1;min-width:0}\
+.ct-bn-title{font-size:19px;font-weight:800;letter-spacing:-.3px;margin:0 0 2px;line-height:1.25}\
+.ct-bn-sub{font-size:15px;font-weight:500;margin:0 0 10px;opacity:.65}\
+.ct-bn-time{font-size:12px;font-weight:600;opacity:.45;margin:0;display:flex;align-items:center;gap:5px}\
+.ct-bn-gift{flex-shrink:0;width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;opacity:.8}\
+.ct-bn-btn{margin-top:14px;border:none;padding:11px 22px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:transform .15s,opacity .15s}\
+.ct-bn-btn:hover:not(:disabled){transform:translateY(-1px);opacity:.9}\
+.ct-bn-btn:disabled{opacity:.4;cursor:default}\
+.ct-bn-dots{position:absolute;top:14px;right:14px;display:flex;gap:5px}\
+.ct-bn-dot{width:5px;height:5px;border-radius:50%;opacity:.12}\
 \
 @media(max-width:480px){\
 .ct{padding:16px 14px 14px;border-radius:12px}\
 .ct-cd{gap:4px}.ct-u{min-width:50px;padding:8px 10px 6px}\
 .ct-n{font-size:24px}.ct-sp{font-size:20px;padding-top:6px}.ct-lb{font-size:8px}\
 .ct-hl{font-size:13px}\
-}';
+.ct-bn{padding:18px 20px;gap:12px;flex-wrap:wrap}\
+.ct-bn-icon{width:44px;height:44px;border-radius:12px}\
+.ct-bn-gift{width:44px;height:44px;border-radius:12px}\
+.ct-bn-title{font-size:16px}\
+.ct-bn-sub{font-size:13px}\
+.ct-bn-btn{font-size:13px;padding:10px 18px}\
+}\
+';
     document.head.appendChild(el);
   }
 
   /* ==========================================================
-     BUILD TIMER HTML (no price inside — price is on the page)
+     BUILD TIMER HTML — CHANGED: expired is now a separate div
      ========================================================== */
   function buildHTML(cfg) {
     return '<div class="ct-wrap"><div id="ct-timer" class="ct ct-' + cfg.style + '" style="--a:' + cfg.color + ';">' +
@@ -262,17 +265,13 @@
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
         '<span>' + cfg.footer + '</span>' +
       '</div>' +
-      '<div id="ct-ex" class="ct-ex">' +
-        '<span class="ct-eico">⏰</span>' +
-        '<p class="ct-em">Offer expired</p>' +
-        '<p class="ct-cd-msg" id="ct-cd-msg"></p>' +
-        '<button id="ct-rb" class="ct-rb" disabled>Come back later</button>' +
-      '</div>' +
-    '</div></div>';
+    '</div>' +
+    '<div id="ct-expired-wrap" class="ct-expired-wrap"></div>' +
+    '</div>';
   }
 
   /* ==========================================================
-     TIMER ENGINE
+     TIMER ENGINE (unchanged)
      ========================================================== */
   var interval = null, endTime = 0, totalMs = 0, VID = '';
 
@@ -306,46 +305,151 @@
   }
 
   /* ==========================================================
-     EXPIRE HANDLER
+     EXPIRE HANDLER — CHANGED: new friendly banner
      ========================================================== */
   function onExpire() {
+    /* Restore original price first */
+    restorePrice();
+
     /* Tell server */
     api('expire', VID).then(function(data) {
+      console.log('[CartTimer] ⏰ Expired, cooldown set:', data);
       showExpired(data.cooldownUntil);
     }).catch(function() {
       showExpired(null);
     });
-
-    /* Restore original price */
-    restorePrice();
   }
 
   function showExpired(cooldownUntil) {
-    var ex = document.getElementById('ct-ex');
-    var msg = document.getElementById('ct-cd-msg');
-    var btn = document.getElementById('ct-rb');
-    if (!ex) return;
-    ex.classList.add('show');
+    var timerEl = document.getElementById('ct-timer');
+    var wrapEl = document.getElementById('ct-expired-wrap');
+    if (!wrapEl) return;
+
+    /* Hide the countdown timer */
+    if (timerEl) timerEl.style.display = 'none';
+
+    /* Get accent color from the timer */
+    var accent = '#6366f1';
+    if (timerEl) {
+      accent = timerEl.style.getPropertyValue('--a') || '#6366f1';
+    }
+
+    /* Parse hex to rgb for tinting */
+    function hexRgb(hex) {
+      hex = hex.replace('#', '');
+      if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      return {
+        r: parseInt(hex.substring(0,2), 16),
+        g: parseInt(hex.substring(2,4), 16),
+        b: parseInt(hex.substring(4,6), 16)
+      };
+    }
+    var c = hexRgb(accent);
+    var bgSoft   = 'rgba('+c.r+','+c.g+','+c.b+', 0.05)';
+    var bgMed    = 'rgba('+c.r+','+c.g+','+c.b+', 0.10)';
+    var bgStrong = 'rgba('+c.r+','+c.g+','+c.b+', 0.15)';
+
+    /* Build smiley SVG */
+    var smiley = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none">' +
+      '<circle cx="12" cy="12" r="10" fill="'+accent+'" opacity="0.12"/>' +
+      '<circle cx="12" cy="12" r="10" stroke="'+accent+'" stroke-width="1.5" fill="none"/>' +
+      '<circle cx="9" cy="10" r="1.3" fill="'+accent+'"/>' +
+      '<circle cx="15" cy="10" r="1.3" fill="'+accent+'"/>' +
+      '<path d="M8.5 14.5C9 16.5 10.5 17.5 12 17.5C13.5 17.5 15 16.5 15.5 14.5" stroke="'+accent+'" stroke-width="1.5" stroke-linecap="round" fill="none"/>' +
+    '</svg>';
+
+    /* Build gift SVG */
+    var gift = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none">' +
+      '<rect x="3" y="11" width="18" height="10" rx="2" fill="'+accent+'" opacity="0.1" stroke="'+accent+'" stroke-width="1.3"/>' +
+      '<rect x="5" y="7" width="14" height="5" rx="1.5" fill="'+accent+'" opacity="0.15" stroke="'+accent+'" stroke-width="1.3"/>' +
+      '<line x1="12" y1="7" x2="12" y2="21" stroke="'+accent+'" stroke-width="1.3"/>' +
+      '<path d="M12 7C12 7 12 4 9.5 4C7 4 7 6 7 6C7 6 7 7 9 7" stroke="'+accent+'" stroke-width="1.3" stroke-linecap="round" fill="none"/>' +
+      '<path d="M12 7C12 7 12 4 14.5 4C17 4 17 6 17 6C17 6 17 7 15 7" stroke="'+accent+'" stroke-width="1.3" stroke-linecap="round" fill="none"/>' +
+    '</svg>';
+
+    /* Check cooldown */
+    var canRestart = false;
+    var timeHTML = '';
 
     if (cooldownUntil) {
       var cdEnd = new Date(cooldownUntil).getTime();
-      btn.disabled = true; btn.textContent = 'Come back later';
-      function upd() {
-        var left = cdEnd - Date.now();
-        if (left <= 0) { msg.textContent='New offer ready!'; btn.disabled=false; btn.textContent='🎉 Get new discount'; return; }
-        var hrs = Math.floor(left/3600000), mins = Math.floor((left%3600000)/60000);
-        msg.textContent = 'New discount in ' + hrs + 'h ' + mins + 'm';
+      var left = cdEnd - Date.now();
+      if (left <= 0) {
+        canRestart = true;
+      } else {
+        var hrs = Math.floor(left / 3600000);
+        var mins = Math.floor((left % 3600000) / 60000);
+        timeHTML = '<p class="ct-bn-time" style="color:'+accent+';">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+          '<span id="ct-bn-countdown">' + (hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm') + ' remaining</span>' +
+        '</p>';
       }
-      upd(); setInterval(upd, 60000);
     }
 
-    btn.onclick = function() {
-      if (btn.disabled) return;
-      ex.classList.remove('show');
-      startNewTimer();
-    };
+    /* Button */
+    var btnHTML = canRestart
+      ? '<button id="ct-bn-restart" class="ct-bn-btn" style="background:'+accent+';color:#fff;">🎉 Get your new discount</button>'
+      : '<button id="ct-bn-restart" class="ct-bn-btn" disabled style="background:'+bgStrong+';color:'+accent+';">⏳ Discount resets tomorrow</button>';
+
+    /* Assemble banner */
+    wrapEl.innerHTML = '<div class="ct-bn" style="background:linear-gradient(135deg, '+bgSoft+' 0%, rgba(255,255,255,0.97) 40%, rgba(255,255,255,0.97) 60%, '+bgSoft+' 100%); border:1px solid '+bgMed+'; box-shadow:0 4px 20px rgba(0,0,0,0.04);">' +
+      '<div class="ct-bn-dots"><div class="ct-bn-dot" style="background:'+accent+';"></div><div class="ct-bn-dot" style="background:'+accent+';"></div><div class="ct-bn-dot" style="background:'+accent+';"></div></div>' +
+      '<div class="ct-bn-icon" style="background:'+bgMed+';">'+smiley+'</div>' +
+      '<div class="ct-bn-body">' +
+        '<p class="ct-bn-title" style="color:'+accent+';">Come back tomorrow</p>' +
+        '<p class="ct-bn-sub" style="color:'+accent+';">for a new discount!</p>' +
+        timeHTML +
+        btnHTML +
+      '</div>' +
+      '<div class="ct-bn-gift" style="background:'+bgMed+';">'+gift+'</div>' +
+    '</div>';
+
+    wrapEl.classList.add('show');
+
+    /* Restart button handler */
+    var restartBtn = document.getElementById('ct-bn-restart');
+    if (restartBtn) {
+      restartBtn.addEventListener('click', function() {
+        if (restartBtn.disabled) return;
+        wrapEl.classList.remove('show');
+        wrapEl.innerHTML = '';
+        if (timerEl) timerEl.style.display = '';
+        startNewTimer();
+      });
+    }
+
+    /* Live cooldown countdown */
+    if (cooldownUntil && !canRestart) {
+      var cdInterval = setInterval(function() {
+        var now = Date.now();
+        var cdEndTime = new Date(cooldownUntil).getTime();
+        var remaining = cdEndTime - now;
+
+        if (remaining <= 0) {
+          clearInterval(cdInterval);
+          /* Refresh banner to show restart */
+          showExpired(cooldownUntil);
+          return;
+        }
+
+        var countdownEl = document.getElementById('ct-bn-countdown');
+        if (countdownEl) {
+          var h = Math.floor(remaining / 3600000);
+          var m = Math.floor((remaining % 3600000) / 60000);
+          var s = Math.floor((remaining % 60000) / 1000);
+          countdownEl.textContent = h > 0
+            ? h + 'h ' + m + 'm remaining'
+            : m + 'm ' + s + 's remaining';
+        }
+      }, 1000);
+    }
+
+    console.log('[CartTimer] 🎨 Friendly expired banner shown');
   }
 
+  /* ==========================================================
+     START NEW TIMER (unchanged)
+     ========================================================== */
   function startNewTimer() {
     api('start', VID).then(function(data) {
       if (data.status === 'active') {
@@ -354,7 +458,6 @@
           applyDiscount(data.discountCode);
           discountApplied = false;
         }
-        /* Re-modify price */
         getProduct().then(function(p) {
           if (p) modifyPrice(p, data.discountPct, document.getElementById('ct-timer')?.style.getPropertyValue('--a') || '#6366f1');
         });
@@ -365,7 +468,7 @@
   }
 
   /* ==========================================================
-     INJECT
+     INJECT (unchanged)
      ========================================================== */
   function findTarget() {
     var sels = ['.product-form__buttons','.product-form__submit','.product__submit',
@@ -400,7 +503,7 @@
   }
 
   /* ==========================================================
-     MAIN INIT
+     MAIN INIT (unchanged)
      ========================================================== */
   function init() {
     if (!isProductPage()) return;
@@ -424,30 +527,24 @@
         code:     settings.discountCode     || null
       };
 
-      /* 1. Inject timer widget */
       inject(cfg);
 
-      /* 2. Start/resume timer via server */
       api('start', VID).then(function(data) {
         if (data.status === 'active') {
           var pct = data.discountPct || cfg.discount;
 
-          /* 3. Modify REAL price on the page */
           if (product) modifyPrice(product, pct, cfg.color);
 
-          /* 4. Intercept add-to-cart to apply discount code */
           var code = data.discountCode || cfg.code;
           if (code) {
             interceptAddToCart(code);
-            /* Pre-apply discount so it's ready when they add to cart */
             applyDiscount(code);
           }
 
-          /* 5. Start countdown */
           startCountdown(data.expiresAt, data.timerMinutes || cfg.minutes);
 
         } else if (data.status === 'cooldown') {
-          inject(cfg); /* Inject timer in expired state */
+          inject(cfg);
           showExpired(data.cooldownUntil);
         }
       });
@@ -460,7 +557,6 @@
     setTimeout(init, 150);
   }
 
-  /* SPA */
   var origPush = history.pushState;
   history.pushState = function() {
     origPush.apply(history, arguments);
