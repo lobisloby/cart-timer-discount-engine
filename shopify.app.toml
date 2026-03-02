@@ -1,4 +1,4 @@
-# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "55db873a11642b8a25325fec3257209a"
 name = "Cart-Timer-Discount-Engine"

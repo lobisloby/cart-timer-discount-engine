@@ -33,17 +33,22 @@ model Session {
 // Campaign Settings - one per shop
 model Campaign {
   id              String   @id @default(cuid())
-  shop            String   @unique  // myshop.myshopify.com
-  
+  shop            String   @unique
+
   // Core Settings
   enabled         Boolean  @default(false)
-  discountPercent Int      @default(10)    // 5-20%
-  timerMinutes    Int      @default(10)    // 5-15 minutes
-  
+  discountPercent Int      @default(10)
+  timerMinutes    Int      @default(10)
+
   // Display Settings
-  displayStyle    String   @default("progress") // "progress" or "countdown"
-  primaryColor    String   @default("#000000")
-  
+  displayStyle    String   @default("progress")
+  primaryColor    String   @default("#6366f1")
+
+  // NEW: Timer Design
+  timerStyle      String   @default("dark")
+  urgencyText     String   @default("Hurry! This deal ends soon")
+  footerText      String   @default("Your discount is reserved for you")
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
