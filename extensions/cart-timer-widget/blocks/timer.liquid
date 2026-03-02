@@ -1,192 +1,120 @@
 {% comment %}
-  Premium Countdown Timer — Section Block (manual placement)
-  Reads from app metafields, falls back to block settings
+  Cart Timer — Section Block (manual placement)
+  Also fetches settings via App Proxy
 {% endcomment %}
 
-{% assign ct_enabled  = app.metafields.cart_timer.enabled %}
-{% assign ct_style    = app.metafields.cart_timer.timer_style %}
-{% assign ct_minutes  = app.metafields.cart_timer.timer_minutes %}
-{% assign ct_discount = app.metafields.cart_timer.discount_percent %}
-{% assign ct_headline = app.metafields.cart_timer.urgency_text %}
-{% assign ct_color    = app.metafields.cart_timer.primary_color %}
-{% assign ct_footer   = app.metafields.cart_timer.footer_text %}
-
-{% unless ct_style and ct_style != blank %}{% assign ct_style = block.settings.timer_style %}{% endunless %}
-{% unless ct_minutes and ct_minutes != blank %}{% assign ct_minutes = block.settings.timer_minutes %}{% endunless %}
-{% unless ct_discount and ct_discount != blank %}{% assign ct_discount = block.settings.discount_percent %}{% endunless %}
-{% unless ct_headline and ct_headline != blank %}{% assign ct_headline = block.settings.urgency_text %}{% endunless %}
-{% unless ct_color and ct_color != blank %}{% assign ct_color = block.settings.accent_color %}{% endunless %}
-{% unless ct_footer and ct_footer != blank %}{% assign ct_footer = block.settings.footer_text %}{% endunless %}
-
-{% unless ct_enabled == "false" %}
-
-<div
-  id="pdt-timer-block"
-  class="pdtb pdtb-{{ ct_style }}"
-  style="--a: {{ ct_color }};"
-  data-shop="{{ shop.permanent_domain }}"
-  data-minutes="{{ ct_minutes }}"
-  data-discount="{{ ct_discount }}"
->
-  <div class="pdtb-hdr">
-    <span>🔥</span>
-    <span class="pdtb-hl">{{ ct_headline }}</span>
-  </div>
-
-  <div class="pdtb-cd">
-    <div class="pdtb-u">
-      <span class="pdtb-n" id="blk-h">00</span>
-      <span class="pdtb-l">Hours</span>
-    </div>
-    <span class="pdtb-sep">:</span>
-    <div class="pdtb-u">
-      <span class="pdtb-n" id="blk-m">10</span>
-      <span class="pdtb-l">Mins</span>
-    </div>
-    <span class="pdtb-sep">:</span>
-    <div class="pdtb-u">
-      <span class="pdtb-n" id="blk-s">00</span>
-      <span class="pdtb-l">Secs</span>
-    </div>
-  </div>
-
-  <div class="pdtb-pg">
-    <div class="pdtb-track"><div class="pdtb-fill" id="blk-f"></div></div>
-  </div>
-
-  <div class="pdtb-ft">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-    <span>{{ ct_discount }}% off — {{ ct_footer }}</span>
-  </div>
-
-  <div id="blk-exp" class="pdtb-exp">
-    <div>
-      <span style="font-size:28px;display:block;margin-bottom:8px;">⏰</span>
-      <p style="margin:0 0 14px;font-size:14px;font-weight:500;">This offer has expired</p>
-      <button id="blk-rst" class="pdtb-rst-btn">Get a new offer</button>
-    </div>
-  </div>
-</div>
-
-<style>
-  .pdtb{--a:#6366f1;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;border-radius:14px;padding:20px 24px 18px;margin:20px 0;position:relative;overflow:hidden;animation:pdtbIn .5s ease-out;box-sizing:border-box}
-  .pdtb *{box-sizing:border-box}
-  @keyframes pdtbIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-
-  .pdtb-dark{background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 8px 30px rgba(0,0,0,.25);color:rgba(255,255,255,.5)}
-  .pdtb-dark .pdtb-hl{color:#f1f5f9}.pdtb-dark .pdtb-n{color:#fff}
-  .pdtb-dark .pdtb-u{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
-  .pdtb-dark .pdtb-sep{color:rgba(255,255,255,.3)}
-  .pdtb-dark .pdtb-track{background:rgba(255,255,255,.1)}.pdtb-dark .pdtb-fill{background:var(--a)}
-  .pdtb-dark .pdtb-exp{background:rgba(15,23,42,.92);color:rgba(255,255,255,.6)}
-
-  .pdtb-gradient{background:linear-gradient(135deg,var(--a),#0f172a);box-shadow:0 8px 30px rgba(0,0,0,.2);color:rgba(255,255,255,.6)}
-  .pdtb-gradient .pdtb-hl{color:#fff}.pdtb-gradient .pdtb-n{color:#fff}
-  .pdtb-gradient .pdtb-u{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15)}
-  .pdtb-gradient .pdtb-sep{color:rgba(255,255,255,.35)}
-  .pdtb-gradient .pdtb-track{background:rgba(255,255,255,.15)}.pdtb-gradient .pdtb-fill{background:#fff}
-  .pdtb-gradient .pdtb-exp{background:rgba(15,23,42,.92);color:rgba(255,255,255,.7)}
-
-  .pdtb-light{background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,.06);color:#64748b}
-  .pdtb-light .pdtb-hl{color:#1e293b}.pdtb-light .pdtb-n{color:#0f172a}
-  .pdtb-light .pdtb-u{background:#f8fafc;border:1px solid #e2e8f0}
-  .pdtb-light .pdtb-sep{color:#cbd5e1}
-  .pdtb-light .pdtb-track{background:#e2e8f0}.pdtb-light .pdtb-fill{background:var(--a)}
-  .pdtb-light .pdtb-exp{background:rgba(255,255,255,.92);color:#64748b}
-
-  .pdtb-hdr{display:flex;align-items:center;gap:8px;margin-bottom:16px}
-  .pdtb-hl{font-size:15px;font-weight:700;letter-spacing:-.2px}
-
-  .pdtb-cd{display:flex;align-items:flex-start;justify-content:center;gap:8px;margin-bottom:16px}
-  .pdtb-u{display:flex;flex-direction:column;align-items:center;border-radius:12px;padding:14px 18px 10px;min-width:72px}
-  .pdtb-n{font-size:36px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-1px}
-  .pdtb-l{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-top:6px}
-  .pdtb-sep{font-size:30px;font-weight:700;padding-top:12px;line-height:1;animation:pdtbBlink 1s step-end infinite}
-  @keyframes pdtbBlink{0%,100%{opacity:1}50%{opacity:.25}}
-
-  .pdtb-pg{margin-bottom:14px}.pdtb-track{height:5px;border-radius:3px;overflow:hidden}
-  .pdtb-fill{height:100%;border-radius:3px;width:100%;transition:width 1s linear}
-
-  .pdtb-ft{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:500}
-
-  .pdtb-exp{display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2;align-items:center;justify-content:center;text-align:center}
-  .pdtb-exp.show{display:flex;animation:pdtbIn .3s ease-out}
-  .pdtb-rst-btn{background:var(--a);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
-
-  .pdtb.urgent .pdtb-u{animation:pdtbPulse 1s ease-in-out infinite}
-  @keyframes pdtbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
-
-  @media(max-width:480px){
-    .pdtb{padding:16px;border-radius:12px}.pdtb-cd{gap:5px}
-    .pdtb-u{min-width:58px;padding:10px 12px 8px}.pdtb-n{font-size:28px}
-    .pdtb-sep{font-size:24px;padding-top:8px}.pdtb-hl{font-size:13px}
-  }
-</style>
+<div id="pdt-block-root" data-shop="{{ shop.permanent_domain }}"></div>
 
 <script>
 (function(){
-  var el = document.getElementById('pdt-timer-block');
-  if (!el) return;
+  var root = document.getElementById('pdt-block-root');
+  if (!root) return;
+  var SHOP = root.dataset.shop;
 
-  var shop = el.dataset.shop;
-  var mins = parseInt(el.dataset.minutes,10)||10;
-  var KEY = 'pdt_'+shop;
-  var TOTAL = mins*60*1000;
-  var iv,end;
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
 
-  function pad(n){return (n<10?'0':'')+n;}
+  fetch('/apps/timer?shop=' + encodeURIComponent(SHOP))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data || data.enabled === false) {
+        root.style.display = 'none';
+        return;
+      }
 
-  function tick(){
-    var h=document.getElementById('blk-h'),m=document.getElementById('blk-m'),
-        s=document.getElementById('blk-s'),f=document.getElementById('blk-f'),
-        e=document.getElementById('blk-exp');
-    if(!h)return;
-    var left=end-Date.now();
-    if(left<=0){
-      clearInterval(iv);h.textContent='00';m.textContent='00';s.textContent='00';
-      f.style.width='0%';e.classList.add('show');el.classList.remove('urgent');
-      localStorage.removeItem(KEY);return;
-    }
-    var sec=Math.floor(left/1000);
-    h.textContent=pad(Math.floor(sec/3600));
-    m.textContent=pad(Math.floor((sec%3600)/60));
-    s.textContent=pad(sec%60);
-    f.style.width=Math.max(0,(left/TOTAL)*100)+'%';
-    if(sec<=30)el.classList.add('urgent');else el.classList.remove('urgent');
-  }
+      var cfg = {
+        style:    data.timerStyle     || 'dark',
+        minutes:  data.timerMinutes   || 10,
+        discount: data.discountPercent || 15,
+        headline: data.urgencyText    || 'Hurry! This deal ends soon',
+        color:    data.primaryColor    || '#6366f1',
+        footer:   data.footerText      || 'Your discount is reserved for you'
+      };
 
-  function start(exp){
-    end=new Date(exp).getTime();
-    document.getElementById('blk-exp').classList.remove('show');
-    tick();clearInterval(iv);iv=setInterval(tick,1000);
-  }
+      var totalMs = cfg.minutes * 60 * 1000;
+      var KEY = 'pdt_' + SHOP + '_' + cfg.minutes;
+      var interval, endTime;
 
-  function create(){
-    var exp=new Date(Date.now()+TOTAL).toISOString();
-    localStorage.setItem(KEY,exp);start(exp);
-  }
+      var themes = {
+        dark: 'background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 8px 30px rgba(0,0,0,.25);',
+        gradient: 'background:linear-gradient(135deg,' + cfg.color + ',#0f172a);box-shadow:0 8px 30px rgba(0,0,0,.2);',
+        light: 'background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,.06);'
+      };
+      var textColors = {
+        dark: { head: '#f1f5f9', num: '#fff', sub: 'rgba(255,255,255,.5)', sep: 'rgba(255,255,255,.3)', unitBg: 'rgba(255,255,255,.06)', unitBdr: 'rgba(255,255,255,.08)', track: 'rgba(255,255,255,.1)', fill: cfg.color, foot: 'rgba(255,255,255,.5)' },
+        gradient: { head: '#fff', num: '#fff', sub: 'rgba(255,255,255,.6)', sep: 'rgba(255,255,255,.35)', unitBg: 'rgba(255,255,255,.12)', unitBdr: 'rgba(255,255,255,.15)', track: 'rgba(255,255,255,.15)', fill: '#fff', foot: 'rgba(255,255,255,.6)' },
+        light: { head: '#1e293b', num: '#0f172a', sub: '#94a3b8', sep: '#cbd5e1', unitBg: '#f8fafc', unitBdr: '#e2e8f0', track: '#e2e8f0', fill: cfg.color, foot: '#64748b' }
+      };
+      var tc = textColors[cfg.style] || textColors.dark;
 
-  document.getElementById('blk-rst').addEventListener('click',create);
+      root.innerHTML = '<div style="' + (themes[cfg.style] || themes.dark) + 'border-radius:14px;padding:20px 24px 18px;margin:20px 0;font-family:-apple-system,sans-serif;position:relative;overflow:hidden;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;"><span style="font-size:18px;">🔥</span><span style="font-size:15px;font-weight:700;color:' + tc.head + ';">' + cfg.headline + '</span></div>' +
+        '<div style="display:flex;align-items:flex-start;justify-content:center;gap:8px;margin-bottom:16px;">' +
+          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bh" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">00</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Hours</span></div>' +
+          '<span style="font-size:30px;font-weight:700;color:' + tc.sep + ';padding-top:12px;">:</span>' +
+          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bm" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">' + pad(cfg.minutes) + '</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Mins</span></div>' +
+          '<span style="font-size:30px;font-weight:700;color:' + tc.sep + ';padding-top:12px;">:</span>' +
+          '<div style="display:flex;flex-direction:column;align-items:center;background:' + tc.unitBg + ';border:1px solid ' + tc.unitBdr + ';border-radius:12px;padding:14px 18px 10px;min-width:72px;"><span id="bs" style="font-size:36px;font-weight:800;color:' + tc.num + ';font-variant-numeric:tabular-nums;">00</span><span style="font-size:10px;font-weight:600;color:' + tc.sub + ';text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Secs</span></div>' +
+        '</div>' +
+        '<div style="margin-bottom:14px;"><div style="height:5px;border-radius:3px;overflow:hidden;background:' + tc.track + ';"><div id="bf" style="height:100%;border-radius:3px;width:100%;background:' + tc.fill + ';transition:width 1s linear;"></div></div></div>' +
+        '<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:500;color:' + tc.foot + ';">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+          cfg.discount + '% off — ' + cfg.footer +
+        '</div>' +
+        '<div id="bexp" style="display:none;position:absolute;inset:0;border-radius:14px;backdrop-filter:blur(8px);background:rgba(15,23,42,.92);z-index:2;align-items:center;justify-content:center;text-align:center;flex-direction:column;padding:20px;">' +
+          '<span style="font-size:28px;margin-bottom:8px;">⏰</span><p style="color:rgba(255,255,255,.6);margin:0 0 14px;font-size:14px;">This offer has expired</p>' +
+          '<button id="brst" style="background:' + cfg.color + ';color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Get a new offer</button>' +
+        '</div>' +
+      '</div>';
 
-  var saved=localStorage.getItem(KEY);
-  if(saved){
-    if(new Date(saved)>new Date()){start(saved);}
-    else{
-      document.getElementById('blk-h').textContent='00';
-      document.getElementById('blk-m').textContent='00';
-      document.getElementById('blk-s').textContent='00';
-      document.getElementById('blk-f').style.width='0%';
-      document.getElementById('blk-exp').classList.add('show');
-    }
-  }else{create();}
+      function tick() {
+        var left = endTime - Date.now();
+        if (left <= 0) {
+          clearInterval(interval);
+          document.getElementById('bh').textContent = '00';
+          document.getElementById('bm').textContent = '00';
+          document.getElementById('bs').textContent = '00';
+          document.getElementById('bf').style.width = '0%';
+          var exp = document.getElementById('bexp');
+          exp.style.display = 'flex';
+          localStorage.removeItem(KEY);
+          return;
+        }
+        var sec = Math.floor(left / 1000);
+        document.getElementById('bh').textContent = pad(Math.floor(sec / 3600));
+        document.getElementById('bm').textContent = pad(Math.floor((sec % 3600) / 60));
+        document.getElementById('bs').textContent = pad(sec % 60);
+        document.getElementById('bf').style.width = Math.max(0, (left / totalMs) * 100) + '%';
+      }
+
+      function start(exp) {
+        endTime = new Date(exp).getTime();
+        var el = document.getElementById('bexp');
+        if (el) el.style.display = 'none';
+        tick(); clearInterval(interval); interval = setInterval(tick, 1000);
+      }
+
+      function create() {
+        var exp = new Date(Date.now() + totalMs).toISOString();
+        localStorage.setItem(KEY, exp); start(exp);
+      }
+
+      document.getElementById('brst').addEventListener('click', create);
+
+      var saved = localStorage.getItem(KEY);
+      if (saved && new Date(saved) > new Date()) { start(saved); }
+      else if (saved) {
+        document.getElementById('bh').textContent = '00';
+        document.getElementById('bm').textContent = '00';
+        document.getElementById('bs').textContent = '00';
+        document.getElementById('bf').style.width = '0%';
+        document.getElementById('bexp').style.display = 'flex';
+      } else { create(); }
+    })
+    .catch(function(err) {
+      console.warn('[CartTimer] Block error:', err);
+    });
 })();
 </script>
-
-{% else %}
-  <!-- Timer disabled from dashboard -->
-{% endunless %}
 
 {% schema %}
 {
@@ -197,53 +125,8 @@
   },
   "settings": [
     {
-      "type": "select",
-      "id": "timer_style",
-      "label": "Timer Style (fallback)",
-      "options": [
-        { "value": "dark", "label": "🌑 Dark Premium" },
-        { "value": "gradient", "label": "🌈 Gradient Bold" },
-        { "value": "light", "label": "☀️ Light Minimal" }
-      ],
-      "default": "dark"
-    },
-    {
-      "type": "text",
-      "id": "urgency_text",
-      "label": "Headline (fallback)",
-      "default": "Hurry! This deal ends soon"
-    },
-    {
-      "type": "range",
-      "id": "timer_minutes",
-      "label": "Duration (fallback)",
-      "min": 1,
-      "max": 30,
-      "step": 1,
-      "default": 10,
-      "unit": "min"
-    },
-    {
-      "type": "range",
-      "id": "discount_percent",
-      "label": "Discount % (fallback)",
-      "min": 5,
-      "max": 50,
-      "step": 5,
-      "default": 15,
-      "unit": "%"
-    },
-    {
-      "type": "color",
-      "id": "accent_color",
-      "label": "Color (fallback)",
-      "default": "#6366f1"
-    },
-    {
-      "type": "text",
-      "id": "footer_text",
-      "label": "Footer (fallback)",
-      "default": "Your discount is reserved for you"
+      "type": "paragraph",
+      "content": "All settings are controlled from the Cart Timer app dashboard."
     }
   ]
 }

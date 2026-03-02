@@ -47,63 +47,39 @@ async function syncSettingsToMetafields(
   },
 ) {
   try {
-    // Get shop GID
+    // Get shop ID
     const shopRes = await admin.graphql(`query { shop { id } }`);
     const shopData = await shopRes.json();
     const shopId = shopData.data.shop.id;
 
-    console.log("🔄 Syncing metafields for shop:", shopId);
+    console.log("🔄 Shop ID:", shopId);
 
-    const metafields = [
-      {
-        key: "enabled",
-        value: settings.enabled.toString(),
-        type: "single_line_text_field",
-      },
-      {
-        key: "discount_percent",
-        value: settings.discountPercent.toString(),
-        type: "single_line_text_field",
-      },
-      {
-        key: "timer_minutes",
-        value: settings.timerMinutes.toString(),
-        type: "single_line_text_field",
-      },
-      {
-        key: "display_style",
-        value: settings.displayStyle,
-        type: "single_line_text_field",
-      },
-      {
-        key: "primary_color",
-        value: settings.primaryColor,
-        type: "single_line_text_field",
-      },
-      {
-        key: "timer_style",
-        value: settings.timerStyle,
-        type: "single_line_text_field",
-      },
-      {
-        key: "urgency_text",
-        value: settings.urgencyText,
-        type: "single_line_text_field",
-      },
-      {
-        key: "footer_text",
-        value: settings.footerText,
-        type: "single_line_text_field",
-      },
-    ];
+    // All settings as key-value pairs
+    const fields: Record<string, string> = {
+      enabled: settings.enabled.toString(),
+      discount_percent: settings.discountPercent.toString(),
+      timer_minutes: settings.timerMinutes.toString(),
+      display_style: settings.displayStyle,
+      primary_color: settings.primaryColor,
+      timer_style: settings.timerStyle,
+      urgency_text: settings.urgencyText,
+      footer_text: settings.footerText,
+    };
 
-    const metafieldsInput = metafields.map((mf) => ({
+    // Build metafields input — use "$app:cart_timer" namespace
+    // This makes them accessible as app.metafields.cart_timer.* in Liquid
+    const metafieldsInput = Object.entries(fields).map(([key, value]) => ({
       ownerId: shopId,
-      namespace: "cart_timer",
-      key: mf.key,
-      value: mf.value,
-      type: mf.type,
+      namespace: "$app:cart_timer",
+      key,
+      value,
+      type: "single_line_text_field",
     }));
+
+    console.log(
+      "📝 Saving metafields:",
+      JSON.stringify(metafieldsInput, null, 2),
+    );
 
     const response = await admin.graphql(
       `#graphql
@@ -129,19 +105,21 @@ async function syncSettingsToMetafields(
     if (result.data?.metafieldsSet?.userErrors?.length > 0) {
       console.error(
         "❌ Metafield errors:",
-        JSON.stringify(result.data.metafieldsSet.userErrors),
+        JSON.stringify(result.data.metafieldsSet.userErrors, null, 2),
       );
-    } else {
-      console.log(
-        "✅ Metafields synced:",
-        result.data?.metafieldsSet?.metafields?.length,
-        "fields",
-      );
+      return { success: false, errors: result.data.metafieldsSet.userErrors };
     }
 
-    return result;
+    const saved = result.data?.metafieldsSet?.metafields || [];
+    console.log("✅ Saved", saved.length, "metafields:");
+    saved.forEach((mf: any) => {
+      console.log(`   ${mf.namespace}.${mf.key} = ${mf.value}`);
+    });
+
+    return { success: true, count: saved.length };
   } catch (error) {
-    console.error("❌ Failed to sync metafields:", error);
+    console.error("❌ Sync failed:", error);
+    return { success: false, error };
   }
 }
 
@@ -164,7 +142,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // ACTION
 // ============================================
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const shop = session.shop;
   const formData = await request.formData();
   const intent = formData.get("intent");
@@ -174,26 +152,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const campaign = await prisma.campaign.findUnique({ where: { shop } });
       const newEnabled = !campaign?.enabled;
 
-      const updated = await prisma.campaign.upsert({
+      await prisma.campaign.upsert({
         where: { shop },
         update: { enabled: newEnabled },
         create: { shop, enabled: newEnabled },
       });
 
-      await syncSettingsToMetafields(admin, {
-        enabled: updated.enabled,
-        discountPercent: updated.discountPercent,
-        timerMinutes: updated.timerMinutes,
-        displayStyle: updated.displayStyle,
-        primaryColor: updated.primaryColor,
-        timerStyle: updated.timerStyle,
-        urgencyText: updated.urgencyText,
-        footerText: updated.footerText,
-      });
-
       return {
         success: true,
-        message: newEnabled ? "Campaign activated!" : "Campaign paused",
+        message: newEnabled ? "✅ Campaign activated!" : "⏸️ Campaign paused",
       };
     }
 
@@ -218,24 +185,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           "Your discount is reserved for you",
       };
 
-      const updated = await prisma.campaign.upsert({
+      await prisma.campaign.upsert({
         where: { shop },
         update: data,
         create: { shop, ...data },
       });
 
-      await syncSettingsToMetafields(admin, {
-        enabled: updated.enabled,
-        ...data,
-      });
-
-      return { success: true, message: "Settings saved & synced!" };
+      return { success: true, message: "✅ Settings saved!" };
     }
 
     return { success: false, message: "Unknown action" };
   } catch (error) {
     console.error("Action error:", error);
-    return { success: false, message: "Something went wrong" };
+    return {
+      success: false,
+      message: "Something went wrong: " + String(error),
+    };
   }
 };
 

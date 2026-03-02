@@ -1,52 +1,13 @@
 {% comment %}
   Cart Timer — App Embed
-  Auto-injects premium countdown on product pages
-  Reads settings from app metafields (set by dashboard)
-  Falls back to block settings (set in theme editor)
+  Fetches settings via App Proxy → always current from database
 {% endcomment %}
-
-{% comment %} Read from app metafields first, fallback to block settings {% endcomment %}
-{% assign ct_enabled  = app.metafields.cart_timer.enabled %}
-{% assign ct_style    = app.metafields.cart_timer.timer_style %}
-{% assign ct_minutes  = app.metafields.cart_timer.timer_minutes %}
-{% assign ct_discount = app.metafields.cart_timer.discount_percent %}
-{% assign ct_headline = app.metafields.cart_timer.urgency_text %}
-{% assign ct_color    = app.metafields.cart_timer.primary_color %}
-{% assign ct_footer   = app.metafields.cart_timer.footer_text %}
-
-{% comment %} Apply defaults if metafields are empty {% endcomment %}
-{% unless ct_style and ct_style != blank %}{% assign ct_style = block.settings.timer_style %}{% endunless %}
-{% unless ct_minutes and ct_minutes != blank %}{% assign ct_minutes = block.settings.timer_minutes %}{% endunless %}
-{% unless ct_discount and ct_discount != blank %}{% assign ct_discount = block.settings.discount_percent %}{% endunless %}
-{% unless ct_headline and ct_headline != blank %}{% assign ct_headline = block.settings.urgency_text %}{% endunless %}
-{% unless ct_color and ct_color != blank %}{% assign ct_color = block.settings.accent_color %}{% endunless %}
-{% unless ct_footer and ct_footer != blank %}{% assign ct_footer = block.settings.footer_text %}{% endunless %}
-
-{% comment %} Only skip if explicitly disabled {% endcomment %}
-{% unless ct_enabled == "false" %}
 
 <script>
 (function () {
   'use strict';
 
-  /* ==========================================================
-     CONFIG — all values from Liquid
-     ========================================================== */
-  var SHOP      = {{ shop.permanent_domain | json }};
-  var STYLE     = {{ ct_style | json }};
-  var MINUTES   = parseInt({{ ct_minutes | json }}, 10) || 10;
-  var DISCOUNT  = parseInt({{ ct_discount | json }}, 10) || 15;
-  var HEADLINE  = {{ ct_headline | json }};
-  var ACCENT    = {{ ct_color | json }};
-  var FOOTER    = {{ ct_footer | json }};
-  var KEY       = 'pdt_' + SHOP;
-  var TOTAL_MS  = MINUTES * 60 * 1000;
-
-  /* Debug: log config in dev */
-  console.log('[CartTimer] Config:', {
-    style: STYLE, minutes: MINUTES, discount: DISCOUNT,
-    headline: HEADLINE, color: ACCENT, footer: FOOTER
-  });
+  var SHOP = {{ shop.permanent_domain | json }};
 
   /* ==========================================================
      HELPERS
@@ -59,35 +20,57 @@
   }
 
   /* ==========================================================
+     FETCH SETTINGS FROM APP PROXY
+     ========================================================== */
+  function fetchSettings() {
+    return fetch('/apps/timer?shop=' + encodeURIComponent(SHOP), {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      console.log('%c[CartTimer] ✅ Settings from API:', 'color: #10b981; font-weight: bold;', data);
+      return data;
+    })
+    .catch(function(err) {
+      console.warn('[CartTimer] ⚠️ Could not fetch settings, using defaults:', err.message);
+      return null;
+    });
+  }
+
+  /* ==========================================================
      CSS INJECTION
      ========================================================== */
-  function injectCSS() {
+  function injectCSS(accent) {
     if (document.getElementById('pdt-css')) return;
     var el = document.createElement('style');
     el.id = 'pdt-css';
     el.textContent = '\
-.pdt{--a:' + ACCENT + ';font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;border-radius:14px;padding:20px 24px 18px;margin:20px 0 16px;position:relative;overflow:hidden;animation:pdtIn .5s ease-out;box-sizing:border-box}\
+.pdt{--a:' + accent + ';font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;border-radius:14px;padding:20px 24px 18px;margin:20px 0 16px;position:relative;overflow:hidden;animation:pdtIn .5s ease-out;box-sizing:border-box}\
 .pdt *,.pdt *::before,.pdt *::after{box-sizing:border-box}\
 @keyframes pdtIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}\
 \
 .pdt-dark{background:linear-gradient(145deg,#0f172a,#1e293b);box-shadow:0 8px 30px rgba(0,0,0,.25)}\
 .pdt-dark .ph{color:#f1f5f9}.pdt-dark .pn{color:#fff}.pdt-dark .pl{color:rgba(255,255,255,.5)}\
 .pdt-dark .ps{color:rgba(255,255,255,.3)}.pdt-dark .pu{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}\
-.pdt-dark .pt{background:rgba(255,255,255,.1)}.pdt-dark .pf{background:var(--a)}\
+.pdt-dark .ptr{background:rgba(255,255,255,.1)}.pdt-dark .pfl{background:var(--a)}\
 .pdt-dark .pft{color:rgba(255,255,255,.5)}.pdt-dark .plk{color:var(--a)}\
 .pdt-dark .pe{background:rgba(15,23,42,.92)}.pdt-dark .pem{color:rgba(255,255,255,.6)}\
 \
 .pdt-gradient{background:linear-gradient(135deg,var(--a),#0f172a);box-shadow:0 8px 30px rgba(0,0,0,.2)}\
 .pdt-gradient .ph{color:#fff}.pdt-gradient .pn{color:#fff}.pdt-gradient .pl{color:rgba(255,255,255,.6)}\
 .pdt-gradient .ps{color:rgba(255,255,255,.35)}.pdt-gradient .pu{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.15)}\
-.pdt-gradient .pt{background:rgba(255,255,255,.15)}.pdt-gradient .pf{background:#fff}\
+.pdt-gradient .ptr{background:rgba(255,255,255,.15)}.pdt-gradient .pfl{background:#fff}\
 .pdt-gradient .pft{color:rgba(255,255,255,.6)}.pdt-gradient .plk{color:rgba(255,255,255,.8)}\
 .pdt-gradient .pe{background:rgba(15,23,42,.92)}.pdt-gradient .pem{color:rgba(255,255,255,.7)}\
 \
 .pdt-light{background:#fff;border:1px solid #e5e7eb;box-shadow:0 4px 20px rgba(0,0,0,.06)}\
 .pdt-light .ph{color:#1e293b}.pdt-light .pn{color:#0f172a}.pdt-light .pl{color:#94a3b8}\
 .pdt-light .ps{color:#cbd5e1}.pdt-light .pu{background:#f8fafc;border:1px solid #e2e8f0}\
-.pdt-light .pt{background:#e2e8f0}.pdt-light .pf{background:var(--a)}\
+.pdt-light .ptr{background:#e2e8f0}.pdt-light .pfl{background:var(--a)}\
 .pdt-light .pft{color:#64748b}.pdt-light .plk{color:var(--a)}\
 .pdt-light .pe{background:rgba(255,255,255,.92)}.pdt-light .pem{color:#64748b}\
 \
@@ -99,11 +82,11 @@
 .pu{display:flex;flex-direction:column;align-items:center;border-radius:12px;padding:14px 18px 10px;min-width:72px;transition:transform .2s}\
 .pn{font-size:36px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-1px}\
 .pl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-top:6px}\
-.ps{font-size:30px;font-weight:700;padding-top:12px;line-height:1;animation:blink 1s step-end infinite}\
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}\
+.ps{font-size:30px;font-weight:700;padding-top:12px;line-height:1;animation:pblink 1s step-end infinite}\
+@keyframes pblink{0%,100%{opacity:1}50%{opacity:.25}}\
 \
-.pd-pg{margin-bottom:14px}.pt{height:5px;border-radius:3px;overflow:hidden}\
-.pf{height:100%;border-radius:3px;width:100%;transition:width 1s linear}\
+.pd-pg{margin-bottom:14px}.ptr{height:5px;border-radius:3px;overflow:hidden}\
+.pfl{height:100%;border-radius:3px;width:100%;transition:width 1s linear}\
 \
 .pd-ft{display:flex;align-items:center;justify-content:center;gap:6px}\
 .pft{font-size:12px;font-weight:500}\
@@ -117,9 +100,9 @@
 .pe-btn{display:inline-flex;align-items:center;gap:6px;background:var(--a);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .15s}\
 .pe-btn:hover{opacity:.9;transform:translateY(-1px)}\
 \
-.pdt.urgent .pu{animation:pulse 1s ease-in-out infinite}\
-.pdt.urgent .pf{animation:bpulse 1s ease-in-out infinite}\
-@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\
+.pdt.urgent .pu{animation:ppulse 1s ease-in-out infinite}\
+.pdt.urgent .pfl{animation:bpulse 1s ease-in-out infinite}\
+@keyframes ppulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\
 @keyframes bpulse{0%,100%{opacity:1}50%{opacity:.6}}\
 \
 @media(max-width:480px){\
@@ -131,34 +114,31 @@
   }
 
   /* ==========================================================
-     HTML BUILDER
+     BUILD TIMER HTML
      ========================================================== */
-  function buildHTML() {
-    return '<div id="pdt-timer" class="pdt pdt-' + STYLE + '" style="--a:' + ACCENT + ';">' +
+  function buildHTML(cfg) {
+    return '<div id="pdt-timer" class="pdt pdt-' + cfg.style + '" style="--a:' + cfg.color + ';">' +
       '<div class="pd-hdr">' +
         '<span class="pd-fire">🔥</span>' +
-        '<span class="ph">' + HEADLINE + '</span>' +
+        '<span class="ph">' + cfg.headline + '</span>' +
       '</div>' +
       '<div class="pd-cd">' +
         '<div class="pu"><span class="pn" id="pd-h">00</span><span class="pl">Hours</span></div>' +
         '<span class="ps">:</span>' +
-        '<div class="pu"><span class="pn" id="pd-m">' + pad(MINUTES) + '</span><span class="pl">Mins</span></div>' +
+        '<div class="pu"><span class="pn" id="pd-m">' + pad(cfg.minutes) + '</span><span class="pl">Mins</span></div>' +
         '<span class="ps">:</span>' +
         '<div class="pu"><span class="pn" id="pd-s">00</span><span class="pl">Secs</span></div>' +
       '</div>' +
-      '<div class="pd-pg"><div class="pt"><div class="pf" id="pd-f"></div></div></div>' +
+      '<div class="pd-pg"><div class="ptr"><div class="pfl" id="pd-f"></div></div></div>' +
       '<div class="pd-ft">' +
         '<svg class="plk" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-        '<span class="pft">' + DISCOUNT + '% off — ' + FOOTER + '</span>' +
+        '<span class="pft">' + cfg.discount + '% off — ' + cfg.footer + '</span>' +
       '</div>' +
       '<div id="pd-exp" class="pe">' +
         '<div class="pe-in">' +
           '<span class="pe-ico">⏰</span>' +
           '<p class="pem">This offer has expired</p>' +
-          '<button id="pd-rst" class="pe-btn">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
-            'Get a new offer' +
-          '</button>' +
+          '<button id="pd-rst" class="pe-btn">Get a new offer</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -169,6 +149,8 @@
      ========================================================== */
   var interval = null;
   var endTime = 0;
+  var totalMs = 0;
+  var timerKey = '';
 
   function tick() {
     var h = document.getElementById('pd-h');
@@ -182,13 +164,11 @@
     var left = endTime - Date.now();
     if (left <= 0) {
       clearInterval(interval);
-      h.textContent = '00';
-      m.textContent = '00';
-      s.textContent = '00';
+      h.textContent = '00'; m.textContent = '00'; s.textContent = '00';
       f.style.width = '0%';
       e.classList.add('show');
       t.classList.remove('urgent');
-      localStorage.removeItem(KEY);
+      localStorage.removeItem(timerKey);
       return;
     }
 
@@ -196,13 +176,10 @@
     h.textContent = pad(Math.floor(sec / 3600));
     m.textContent = pad(Math.floor((sec % 3600) / 60));
     s.textContent = pad(sec % 60);
-    f.style.width = Math.max(0, (left / TOTAL_MS) * 100) + '%';
+    f.style.width = Math.max(0, (left / totalMs) * 100) + '%';
 
-    if (sec <= 30) {
-      t.classList.add('urgent');
-    } else {
-      t.classList.remove('urgent');
-    }
+    if (sec <= 30) t.classList.add('urgent');
+    else t.classList.remove('urgent');
   }
 
   function startTimer(exp) {
@@ -215,8 +192,8 @@
   }
 
   function createTimer() {
-    var exp = new Date(Date.now() + TOTAL_MS).toISOString();
-    localStorage.setItem(KEY, exp);
+    var exp = new Date(Date.now() + totalMs).toISOString();
+    localStorage.setItem(timerKey, exp);
     startTimer(exp);
   }
 
@@ -224,7 +201,7 @@
      FIND ADD-TO-CART BUTTON
      ========================================================== */
   function findTarget() {
-    var selectors = [
+    var sels = [
       '.product-form__buttons',
       '.product-form__submit',
       '.product__submit',
@@ -234,79 +211,94 @@
       '[data-add-to-cart]',
       '#AddToCart',
       '.add-to-cart',
-      '.product-single__cart-submit',
       'form[action*="/cart/add"]'
     ];
-    for (var i = 0; i < selectors.length; i++) {
-      var el = document.querySelector(selectors[i]);
+    for (var i = 0; i < sels.length; i++) {
+      var el = document.querySelector(sels[i]);
       if (el) return el;
     }
     return null;
   }
 
   /* ==========================================================
-     INJECT TIMER
+     INJECT TIMER INTO PAGE
      ========================================================== */
-  function inject() {
+  function inject(cfg) {
     if (document.getElementById('pdt-timer')) return;
 
     var target = findTarget();
     if (!target) {
-      console.log('[CartTimer] No Add to Cart button found');
+      console.log('[CartTimer] ⚠️ No Add to Cart button found');
       return;
     }
 
-    /* Find the best parent */
-    var insertRef = target.closest(
+    var parent = target.closest(
       '.product-form__buttons, .product__submit, .product-form, form[action*="/cart/add"]'
     ) || target;
 
-    injectCSS();
+    injectCSS(cfg.color);
 
-    var wrapper = document.createElement('div');
-    wrapper.innerHTML = buildHTML();
-    var timerNode = wrapper.firstElementChild;
-
-    insertRef.parentNode.insertBefore(timerNode, insertRef);
+    var wrap = document.createElement('div');
+    wrap.innerHTML = buildHTML(cfg);
+    parent.parentNode.insertBefore(wrap.firstElementChild, parent);
 
     /* Wire restart */
-    var rstBtn = document.getElementById('pd-rst');
-    if (rstBtn) {
-      rstBtn.addEventListener('click', createTimer);
-    }
+    document.getElementById('pd-rst').addEventListener('click', createTimer);
 
-    /* Start or resume */
-    var saved = localStorage.getItem(KEY);
-    if (saved) {
-      if (new Date(saved) > new Date()) {
-        startTimer(saved);
-      } else {
-        var hEl = document.getElementById('pd-h');
-        var mEl = document.getElementById('pd-m');
-        var sEl = document.getElementById('pd-s');
-        var fEl = document.getElementById('pd-f');
-        var eEl = document.getElementById('pd-exp');
-        if (hEl) hEl.textContent = '00';
-        if (mEl) mEl.textContent = '00';
-        if (sEl) sEl.textContent = '00';
-        if (fEl) fEl.style.width = '0%';
-        if (eEl) eEl.classList.add('show');
-      }
+    /* Resume or create */
+    var saved = localStorage.getItem(timerKey);
+    if (saved && new Date(saved) > new Date()) {
+      startTimer(saved);
+    } else if (saved) {
+      document.getElementById('pd-h').textContent = '00';
+      document.getElementById('pd-m').textContent = '00';
+      document.getElementById('pd-s').textContent = '00';
+      document.getElementById('pd-f').style.width = '0%';
+      document.getElementById('pd-exp').classList.add('show');
     } else {
       createTimer();
     }
 
-    console.log('[CartTimer] ✅ Timer injected on product page');
+    console.log('[CartTimer] ✅ Timer injected with settings:', cfg);
   }
 
   /* ==========================================================
-     INIT
+     MAIN INIT
      ========================================================== */
   function init() {
     if (!isProductPage()) return;
-    inject();
+
+    console.log('[CartTimer] 🔄 Fetching settings from API...');
+
+    fetchSettings().then(function(data) {
+      /* Build config — use API data or defaults */
+      var cfg = {
+        style:    (data && data.timerStyle)      || 'dark',
+        minutes:  (data && data.timerMinutes)     || 10,
+        discount: (data && data.discountPercent)  || 15,
+        headline: (data && data.urgencyText)      || 'Hurry! This deal ends soon',
+        color:    (data && data.primaryColor)      || '#6366f1',
+        footer:   (data && data.footerText)        || 'Your discount is reserved for you'
+      };
+
+      /* If explicitly disabled, don't show */
+      if (data && data.enabled === false) {
+        console.log('[CartTimer] ⏸️ Campaign disabled');
+        return;
+      }
+
+      /* Set timer globals */
+      totalMs  = cfg.minutes * 60 * 1000;
+      timerKey = 'pdt_' + SHOP + '_' + cfg.minutes + '_' + cfg.discount;
+
+      /* Inject! */
+      inject(cfg);
+    });
   }
 
+  /* ==========================================================
+     START
+     ========================================================== */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
@@ -317,16 +309,14 @@
   var origPush = history.pushState;
   history.pushState = function () {
     origPush.apply(history, arguments);
-    setTimeout(function () { if (isProductPage()) inject(); }, 500);
+    setTimeout(function () { if (isProductPage()) init(); }, 500);
   };
   window.addEventListener('popstate', function () {
-    setTimeout(function () { if (isProductPage()) inject(); }, 500);
+    setTimeout(function () { if (isProductPage()) init(); }, 500);
   });
 
 })();
 </script>
-
-{% endunless %}
 
 {% schema %}
 {
@@ -334,53 +324,8 @@
   "target": "head",
   "settings": [
     {
-      "type": "select",
-      "id": "timer_style",
-      "label": "Timer Style (fallback)",
-      "options": [
-        { "value": "dark", "label": "🌑 Dark Premium" },
-        { "value": "gradient", "label": "🌈 Gradient Bold" },
-        { "value": "light", "label": "☀️ Light Minimal" }
-      ],
-      "default": "dark"
-    },
-    {
-      "type": "text",
-      "id": "urgency_text",
-      "label": "Headline (fallback)",
-      "default": "Hurry! This deal ends soon"
-    },
-    {
-      "type": "range",
-      "id": "timer_minutes",
-      "label": "Duration in minutes (fallback)",
-      "min": 1,
-      "max": 30,
-      "step": 1,
-      "default": 10,
-      "unit": "min"
-    },
-    {
-      "type": "range",
-      "id": "discount_percent",
-      "label": "Discount % (fallback)",
-      "min": 5,
-      "max": 50,
-      "step": 5,
-      "default": 15,
-      "unit": "%"
-    },
-    {
-      "type": "color",
-      "id": "accent_color",
-      "label": "Accent Color (fallback)",
-      "default": "#6366f1"
-    },
-    {
-      "type": "text",
-      "id": "footer_text",
-      "label": "Footer (fallback)",
-      "default": "Your discount is reserved for you"
+      "type": "paragraph",
+      "content": "All timer settings are managed from the Cart Timer app dashboard. Save settings there and they will appear here automatically."
     }
   ]
 }
