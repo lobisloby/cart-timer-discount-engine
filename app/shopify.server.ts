@@ -1,3 +1,5 @@
+// app/shopify.server.ts
+
 import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
@@ -6,6 +8,8 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+
+export const PLAN_NAME = "Pro Plan";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,

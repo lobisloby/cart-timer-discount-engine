@@ -72,3 +72,13 @@ model TimerSession {
   @@index([shop])
   @@index([expiresAt])
 }
+
+
+model Shop {
+  id          String   @id @default(uuid())
+  shop        String   @unique
+  installedAt DateTime @default(now())
+  plan        String   @default("trial")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
