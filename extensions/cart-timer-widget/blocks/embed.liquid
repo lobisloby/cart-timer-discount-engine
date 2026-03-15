@@ -11,7 +11,7 @@
   var PROXY    = '/apps/timer';
 
   /* ==========================================================
-     VISITOR ID (unchanged)
+     VISITOR ID
      ========================================================== */
   function getVid() {
     var k = 'ct_vid', v = localStorage.getItem(k);
@@ -23,7 +23,7 @@
   }
 
   /* ==========================================================
-     HELPERS (unchanged)
+     HELPERS
      ========================================================== */
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -62,7 +62,7 @@
   }
 
   /* ==========================================================
-     MODIFY REAL PRODUCT PRICE ON PAGE (unchanged)
+     MODIFY REAL PRODUCT PRICE ON PAGE
      ========================================================== */
   var originalPriceHTML = null;
   var priceContainer = null;
@@ -120,12 +120,13 @@
   }
 
   /* ==========================================================
-     APPLY DISCOUNT CODE TO CART (unchanged)
+     APPLY DISCOUNT CODE TO CART
      ========================================================== */
   var discountApplied = false;
+  var timerActive = false;
 
   function applyDiscount(code) {
-    if (!code || discountApplied) return;
+    if (!code || discountApplied || !timerActive) return;
 
     fetch('/discount/' + encodeURIComponent(code), {
       method: 'GET',
@@ -148,6 +149,7 @@
       form.dataset.ctIntercepted = 'true';
 
       form.addEventListener('submit', function() {
+        if (!timerActive) return;
         setTimeout(function() {
           applyDiscount(code);
         }, 500);
@@ -156,6 +158,7 @@
       var buttons = form.querySelectorAll('[type="submit"], button[name="add"], .product-form__submit');
       buttons.forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (!timerActive) return;
           setTimeout(function() {
             applyDiscount(code);
           }, 800);
@@ -167,7 +170,7 @@
   }
 
   /* ==========================================================
-     CSS — UPDATED: new expired banner styles added at the end
+     CSS
      ========================================================== */
   function injectCSS(accent) {
     if (document.getElementById('ct-css')) return;
@@ -248,7 +251,7 @@
   }
 
   /* ==========================================================
-     BUILD TIMER HTML — CHANGED: expired is now a separate div
+     BUILD TIMER HTML
      ========================================================== */
   function buildHTML(cfg) {
     return '<div class="ct-wrap"><div id="ct-timer" class="ct ct-' + cfg.style + '" style="--a:' + cfg.color + ';">' +
@@ -271,7 +274,7 @@
   }
 
   /* ==========================================================
-     TIMER ENGINE (unchanged)
+     TIMER ENGINE
      ========================================================== */
   var interval = null, endTime = 0, totalMs = 0, VID = '';
 
@@ -299,15 +302,20 @@
   }
 
   function startCountdown(expiresAt, mins) {
+    timerActive = true;
     endTime = new Date(expiresAt).getTime();
     totalMs = mins * 60 * 1000;
     tick(); clearInterval(interval); interval = setInterval(tick, 1000);
   }
 
   /* ==========================================================
-     EXPIRE HANDLER — CHANGED: new friendly banner
+     EXPIRE HANDLER
      ========================================================== */
   function onExpire() {
+    /* Stop all discount activity */
+    timerActive = false;
+    discountApplied = false;
+
     /* Restore original price first */
     restorePrice();
 
@@ -427,7 +435,6 @@
 
         if (remaining <= 0) {
           clearInterval(cdInterval);
-          /* Refresh banner to show restart */
           showExpired(cooldownUntil);
           return;
         }
@@ -448,15 +455,15 @@
   }
 
   /* ==========================================================
-     START NEW TIMER (unchanged)
+     START NEW TIMER
      ========================================================== */
   function startNewTimer() {
     api('start', VID).then(function(data) {
       if (data.status === 'active') {
         startCountdown(data.expiresAt, data.timerMinutes);
         if (data.discountCode) {
-          applyDiscount(data.discountCode);
           discountApplied = false;
+          interceptAddToCart(data.discountCode);
         }
         getProduct().then(function(p) {
           if (p) modifyPrice(p, data.discountPct, document.getElementById('ct-timer')?.style.getPropertyValue('--a') || '#6366f1');
@@ -468,7 +475,7 @@
   }
 
   /* ==========================================================
-     INJECT (unchanged)
+     INJECT
      ========================================================== */
   function findTarget() {
     var sels = ['.product-form__buttons','.product-form__submit','.product__submit',
@@ -479,7 +486,7 @@
     return null;
   }
 
-    function inject(cfg) {
+  function inject(cfg) {
     if (document.getElementById('ct-timer')) return;
     var target = findTarget();
     if (!target) return;
@@ -525,7 +532,7 @@
   }
 
   /* ==========================================================
-     MAIN INIT (unchanged)
+     MAIN INIT
      ========================================================== */
   function init() {
     if (!isProductPage()) return;
@@ -555,15 +562,15 @@
         if (data.status === 'active') {
           var pct = data.discountPct || cfg.discount;
 
+          /* Start countdown FIRST — sets timerActive = true */
+          startCountdown(data.expiresAt, data.timerMinutes || cfg.minutes);
+
           if (product) modifyPrice(product, pct, cfg.color);
 
           var code = data.discountCode || cfg.code;
           if (code) {
             interceptAddToCart(code);
-            applyDiscount(code);
           }
-
-          startCountdown(data.expiresAt, data.timerMinutes || cfg.minutes);
 
         } else if (data.status === 'cooldown') {
           inject(cfg);

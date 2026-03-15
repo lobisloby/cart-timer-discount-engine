@@ -2,6 +2,7 @@
 
 import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
+import { unauthenticated } from "../shopify.server";
 
 const headers = {
   "Content-Type": "application/json",
@@ -12,6 +13,84 @@ const headers = {
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
 }
+
+// ── DISCOUNT HELPERS ──
+
+async function activateShopifyDiscount(shop: string, discountId: string) {
+  try {
+    const { admin } = await unauthenticated.admin(shop);
+    const response = await admin.graphql(
+      `#graphql
+      mutation discountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
+        discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
+          codeDiscountNode { id }
+          userErrors { field message }
+        }
+      }`,
+      {
+        variables: {
+          id: discountId,
+          basicCodeDiscount: {
+            endsAt: null,
+          },
+        },
+      },
+    );
+    const result = await response.json();
+    const errors = result.data?.discountCodeBasicUpdate?.userErrors;
+    if (errors?.length > 0) {
+      console.error("⚠️ Activate discount errors:", errors);
+    } else {
+      console.log("✅ Discount activated:", discountId);
+    }
+  } catch (e) {
+    console.error("⚠️ Failed to activate discount:", e);
+  }
+}
+
+async function deactivateShopifyDiscount(shop: string, discountId: string) {
+  try {
+    const { admin } = await unauthenticated.admin(shop);
+    const response = await admin.graphql(
+      `#graphql
+      mutation discountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
+        discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
+          codeDiscountNode { id }
+          userErrors { field message }
+        }
+      }`,
+      {
+        variables: {
+          id: discountId,
+          basicCodeDiscount: {
+            endsAt: new Date().toISOString(),
+          },
+        },
+      },
+    );
+    const result = await response.json();
+    const errors = result.data?.discountCodeBasicUpdate?.userErrors;
+    if (errors?.length > 0) {
+      console.error("⚠️ Deactivate discount errors:", errors);
+    } else {
+      console.log("🔒 Discount deactivated:", discountId);
+    }
+  } catch (e) {
+    console.error("⚠️ Failed to deactivate discount:", e);
+  }
+}
+
+async function countActiveTimers(shop: string): Promise<number> {
+  return prisma.timerSession.count({
+    where: {
+      shop,
+      isExpired: false,
+      expiresAt: { gt: new Date() },
+    },
+  });
+}
+
+// ── MAIN LOADER ──
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -45,8 +124,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     // ── START OR RESUME TIMER ──
-        // In the "start" action, after returning active status, add discountCode:
-    // Find the campaign to get the discount code
     if (action === "start") {
       if (!vid) return json({ error: "Missing vid" }, 400);
 
@@ -63,6 +140,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       if (existing) {
         if (!existing.isExpired && existing.expiresAt > now) {
+          // Timer still active — ensure discount is active too
+          if (campaign.shopifyDiscountId) {
+            await activateShopifyDiscount(shop, campaign.shopifyDiscountId);
+          }
+
           return json({
             status: "active",
             expiresAt: existing.expiresAt.toISOString(),
@@ -81,7 +163,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           });
         }
 
-        const newExpiry = new Date(now.getTime() + campaign.timerMinutes * 60 * 1000);
+        // Restart timer
+        const newExpiry = new Date(
+          now.getTime() + campaign.timerMinutes * 60 * 1000,
+        );
         const updated = await prisma.timerSession.update({
           where: { id: existing.id },
           data: {
@@ -92,6 +177,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             cooldownUntil: null,
           },
         });
+
+        // Reactivate discount
+        if (campaign.shopifyDiscountId) {
+          await activateShopifyDiscount(shop, campaign.shopifyDiscountId);
+        }
 
         return json({
           status: "active",
@@ -104,7 +194,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
       }
 
-      const expiresAt = new Date(now.getTime() + campaign.timerMinutes * 60 * 1000);
+      // Brand new timer
+      const expiresAt = new Date(
+        now.getTime() + campaign.timerMinutes * 60 * 1000,
+      );
       const session = await prisma.timerSession.create({
         data: {
           shop,
@@ -115,6 +208,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           isExpired: false,
         },
       });
+
+      // Ensure discount is active
+      if (campaign.shopifyDiscountId) {
+        await activateShopifyDiscount(shop, campaign.shopifyDiscountId);
+      }
 
       return json({
         status: "active",
@@ -127,7 +225,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
 
-    // ── EXPIRE TIMER (called when countdown hits 0) ──
+    // ── EXPIRE TIMER ──
     if (action === "expire") {
       if (!vid) return json({ error: "Missing vid" }, 400);
 
@@ -138,7 +236,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (!existing) return json({ status: "not_found" });
 
       const now = new Date();
-      const cooldownUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+      const cooldownUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
       await prisma.timerSession.update({
         where: { id: existing.id },
@@ -148,7 +246,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         },
       });
 
-      console.log("⏰ Timer expired for:", vid, "Cooldown until:", cooldownUntil);
+      console.log(
+        "⏰ Timer expired for:",
+        vid,
+        "Cooldown until:",
+        cooldownUntil,
+      );
+
+      // Check if ANY other active timers remain for this shop
+      const activeCount = await countActiveTimers(shop);
+      console.log("📊 Active timers remaining for shop:", activeCount);
+
+      if (activeCount === 0) {
+        // No one else is using the discount — deactivate it
+        const campaign = await prisma.campaign.findUnique({ where: { shop } });
+        if (campaign?.shopifyDiscountId) {
+          await deactivateShopifyDiscount(shop, campaign.shopifyDiscountId);
+          console.log(
+            "🔒 No active timers — discount deactivated for shop:",
+            shop,
+          );
+        }
+      }
 
       return json({
         status: "expired",
@@ -186,7 +305,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
       }
 
-      return json({ status: "ready" }); // Can start new timer
+      return json({ status: "ready" });
     }
 
     return json({ error: "Unknown action" }, 400);
