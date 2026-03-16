@@ -1,15 +1,13 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// Shopify Session (required - don't modify)
+// Shopify Session (required - don't modify fields)
 model Session {
   id                  String    @id
   shop                String
@@ -28,6 +26,8 @@ model Session {
   emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+
+  @@map("ct_sessions")
 }
 
 // Campaign Settings - one per shop
@@ -54,6 +54,8 @@ model Campaign {
   // Timestamps
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@map("ct_campaigns")
 }
 
 // Active Timer Sessions - tracks each customer's timer
@@ -71,8 +73,8 @@ model TimerSession {
   @@unique([shop, visitorId])
   @@index([shop])
   @@index([expiresAt])
+  @@map("ct_timer_sessions")
 }
-
 
 model Shop {
   id          String   @id @default(uuid())
@@ -81,4 +83,6 @@ model Shop {
   plan        String   @default("trial")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("ct_shops")
 }
