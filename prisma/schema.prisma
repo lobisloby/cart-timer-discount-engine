@@ -51,6 +51,9 @@ model Campaign {
   discountCode       String?
   shopifyDiscountId  String?
 
+   // Cooldown
+  cooldownHours      Int      @default(24)
+
   // Timestamps
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

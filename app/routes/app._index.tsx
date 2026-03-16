@@ -200,6 +200,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           30,
           Math.max(1, Number(formData.get("timerMinutes")) || 10),
         ),
+        cooldownHours: Math.min(
+          72,
+          Math.max(1, Number(formData.get("cooldownHours")) || 24),
+        ),
         displayStyle: (formData.get("displayStyle") as string) || "progress",
         primaryColor: (formData.get("primaryColor") as string) || "#6366f1",
         timerStyle: (formData.get("timerStyle") as string) || "dark",
@@ -735,6 +739,7 @@ export default function Dashboard() {
     enabled: campaign?.enabled ?? false,
     discountPercent: campaign?.discountPercent ?? 10,
     timerMinutes: campaign?.timerMinutes ?? 10,
+    cooldownHours: campaign?.cooldownHours ?? 24,
     displayStyle: campaign?.displayStyle ?? "progress",
     primaryColor: campaign?.primaryColor ?? "#6366f1",
     timerStyle: campaign?.timerStyle ?? "dark",
@@ -752,6 +757,7 @@ export default function Dashboard() {
         enabled: campaign.enabled,
         discountPercent: campaign.discountPercent,
         timerMinutes: campaign.timerMinutes,
+        cooldownHours: campaign.cooldownHours ?? 24,
         displayStyle: campaign.displayStyle,
         primaryColor: campaign.primaryColor,
         timerStyle: campaign.timerStyle ?? "dark",
@@ -771,6 +777,7 @@ export default function Dashboard() {
         intent: "save",
         discountPercent: s.discountPercent.toString(),
         timerMinutes: s.timerMinutes.toString(),
+        cooldownHours: s.cooldownHours.toString(),
         displayStyle: s.displayStyle,
         primaryColor: s.primaryColor,
         timerStyle: s.timerStyle,
@@ -790,12 +797,12 @@ export default function Dashboard() {
       primaryColor: "#6366f1",
       discountPercent: 10,
       timerMinutes: 10,
+      cooldownHours: 24,
     }));
   }, []);
 
   const isLoading = fetcher.state !== "idle";
-  const update = (key: string, val: any) =>
-    setS((p) => ({ ...p, [key]: val }));
+  const update = (key: string, val: any) => setS((p) => ({ ...p, [key]: val }));
 
   return (
     <div style={S.page}>
@@ -1041,9 +1048,7 @@ export default function Dashboard() {
           <div style={{ marginBottom: "20px" }}>
             <div style={S.label}>
               <span style={S.labelText}>Discount</span>
-              <span style={S.badge("#6366f1")}>
-                {s.discountPercent}% OFF
-              </span>
+              <span style={S.badge("#6366f1")}>{s.discountPercent}% OFF</span>
             </div>
             <input
               type="range"
@@ -1061,7 +1066,7 @@ export default function Dashboard() {
               <span>50%</span>
             </div>
           </div>
-          <div>
+          <div style={{ marginBottom: "20px" }}>
             <div style={S.label}>
               <span style={S.labelText}>Timer Duration</span>
               <span style={S.badge("#10b981")}>{s.timerMinutes} min</span>
@@ -1071,15 +1076,37 @@ export default function Dashboard() {
               min="1"
               max="30"
               value={s.timerMinutes}
-              onChange={(e) =>
-                update("timerMinutes", Number(e.target.value))
-              }
+              onChange={(e) => update("timerMinutes", Number(e.target.value))}
               style={S.slider}
             />
             <div style={S.range}>
               <span>1 min</span>
               <span>30 min</span>
             </div>
+          </div>
+          <div>
+            <div style={S.label}>
+              <span style={S.labelText}>Cooldown Period</span>
+              <span style={S.badge("#f59e0b")}>{s.cooldownHours}h</span>
+            </div>
+            <p
+              style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 10px" }}
+            >
+              Time before a visitor can get a new discount after expiry
+            </p>
+            <select
+              className="ct-dash-input"
+              value={s.cooldownHours}
+              onChange={(e) => update("cooldownHours", Number(e.target.value))}
+            >
+              <option value={1}>1 hour — Flash sales</option>
+              <option value={3}>3 hours</option>
+              <option value={6}>6 hours</option>
+              <option value={12}>12 hours</option>
+              <option value={24}>24 hours — Default</option>
+              <option value={48}>48 hours</option>
+              <option value={72}>72 hours — Premium brands</option>
+            </select>
           </div>
         </div>
 

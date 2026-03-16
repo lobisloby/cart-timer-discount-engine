@@ -35,9 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   trialEndDate.setDate(trialEndDate.getDate() + 7);
   const daysLeft = Math.max(
     0,
-    Math.ceil(
-      (trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-    ),
+    Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
   );
   const trialExpired = daysLeft <= 0;
 
@@ -63,10 +61,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         `,
       );
       const data = await response.json();
-      const subs =
-        data.data?.currentAppInstallation?.activeSubscriptions || [];
+      const subs = data.data?.currentAppInstallation?.activeSubscriptions || [];
 
-      // If we can query subscriptions, billing API is available
       billingAvailable = true;
 
       hasSubscription = subs.some(
@@ -85,8 +81,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
+  const isDev = process.env.NODE_ENV !== "production";
+
   console.log(
-    `💳 ${shop} | Plan: ${shopRecord.plan} | Days left: ${daysLeft} | Subscribed: ${hasSubscription} | Billing available: ${billingAvailable}`,
+    `💳 ${shop} | Plan: ${shopRecord.plan} | Days left: ${daysLeft} | Subscribed: ${hasSubscription} | Billing available: ${billingAvailable} | Dev: ${isDev}`,
   );
 
   return {
@@ -95,6 +93,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     daysLeft,
     hasSubscription,
     billingAvailable,
+    isDev,
     shop,
   };
 };
@@ -182,13 +181,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 // COMPONENT
 // ============================================
 export default function App() {
-  const {
-    apiKey,
-    trialExpired,
-    daysLeft,
-    hasSubscription,
-    billingAvailable,
-  } = useLoaderData<typeof loader>();
+  const { apiKey, trialExpired, daysLeft, hasSubscription, billingAvailable,isDev} =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   // Redirect to Shopify billing page
@@ -467,7 +461,7 @@ export default function App() {
       <s-app-nav>
         <s-link href="/app">Dashboard</s-link>
         <s-link href="/app/billing">Billing</s-link>
-        <s-link href="/app/debug">Debug</s-link>
+        {isDev && <s-link href="/app/debug">Debug</s-link>}
       </s-app-nav>
       <Outlet />
     </AppProvider>

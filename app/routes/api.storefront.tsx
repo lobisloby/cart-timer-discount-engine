@@ -236,7 +236,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (!existing) return json({ status: "not_found" });
 
       const now = new Date();
-      const cooldownUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const campaign = await prisma.campaign.findUnique({ where: { shop } });
+      const cooldownMs = (campaign?.cooldownHours ?? 24) * 60 * 60 * 1000;
+      const cooldownUntil = new Date(now.getTime() + cooldownMs);
 
       await prisma.timerSession.update({
         where: { id: existing.id },
@@ -272,7 +274,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return json({
         status: "expired",
         cooldownUntil: cooldownUntil.toISOString(),
-        cooldownMs: 24 * 60 * 60 * 1000,
+        cooldownMs: cooldownMs,
       });
     }
 
