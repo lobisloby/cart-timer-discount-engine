@@ -126,18 +126,25 @@
   var timerActive = false;
 
   function applyDiscount(code) {
-    if (!code || discountApplied || !timerActive) return;
+    if (!code || !timerActive) return;
 
-    fetch('/discount/' + encodeURIComponent(code), {
-      method: 'GET',
-      redirect: 'manual'
-    }).then(function() {
+    var key = 'ct_discount_applied';
+    var stored = localStorage.getItem(key);
+
+    /* Already applied this exact code — skip redirect */
+    if (stored === code) {
       discountApplied = true;
-      console.log('[CartTimer] ✅ Discount code applied:', code);
-    }).catch(function(err) {
-      console.log('[CartTimer] Discount apply attempt:', err.message);
-      discountApplied = true;
-    });
+      console.log('[CartTimer] ✅ Discount already in session:', code);
+      return;
+    }
+
+    console.log('[CartTimer] 🎟️ Applying discount via redirect:', code);
+    discountApplied = true;
+    localStorage.setItem(key, code);
+
+    /* Real browser navigation — only way Shopify sets discount cookie */
+    var returnUrl = window.location.pathname + window.location.search;
+    window.location.replace('/discount/' + encodeURIComponent(code) + '?redirect=' + encodeURIComponent(returnUrl));
   }
 
   function interceptAddToCart(code) {
@@ -341,6 +348,8 @@
   function onExpire() {
     timerActive = false;
     discountApplied = false;
+    localStorage.removeItem('ct_discount_applied');
+
     restorePrice();
 
     api('expire', VID).then(function(data) {
@@ -477,6 +486,7 @@
         if (data.discountCode) {
           discountApplied = false;
           interceptAddToCart(data.discountCode);
+          applyDiscount(data.discountCode);
         }
         getProduct().then(function(p) {
           if (p) modifyPrice(p, data.discountPct, document.getElementById('ct-timer')?.style.getPropertyValue('--a') || '#6366f1');
@@ -580,6 +590,7 @@
           var code = data.discountCode || cfg.code;
           if (code) {
             interceptAddToCart(code);
+            applyDiscount(code);
           }
 
         } else if (data.status === 'cooldown') {
