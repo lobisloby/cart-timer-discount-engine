@@ -11,6 +11,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate, PLAN_NAME } from "../shopify.server";
 import prisma from "../db.server";
+import { AlertTriangle, Clock } from "lucide-react";
 
 // ============================================
 // LOADER
@@ -181,8 +182,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 // COMPONENT
 // ============================================
 export default function App() {
-  const { apiKey, trialExpired, daysLeft, hasSubscription, billingAvailable,isDev} =
-    useLoaderData<typeof loader>();
+  const {
+    apiKey,
+    trialExpired,
+    daysLeft,
+    hasSubscription,
+    billingAvailable,
+    isDev,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   // Redirect to Shopify billing page
@@ -417,23 +424,24 @@ export default function App() {
         <div
           style={{
             padding: "10px 20px",
-            background:
-              daysLeft <= 2
-                ? "linear-gradient(135deg, #fef3c7, #fde68a)"
-                : "linear-gradient(135deg, #eef2ff, #e0e7ff)",
+            background: "#18181b",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             fontSize: "13px",
-            fontWeight: 600,
-            color: daysLeft <= 2 ? "#92400e" : "#4338ca",
-            borderBottom: "1px solid",
-            borderColor: daysLeft <= 2 ? "#fde68a" : "#c7d2fe",
+            fontWeight: 500,
+            color: "#fafafa",
           }}
         >
-          {daysLeft <= 2 ? "⚠️" : "⏱️"} Free trial: {daysLeft}{" "}
-          {daysLeft === 1 ? "day" : "days"} remaining
+          <Clock size={14} color={daysLeft <= 2 ? "#fbbf24" : "#a1a1aa"} />
+          <span>
+            {daysLeft <= 2 ? "⚠️ " : ""}Free trial:{" "}
+            <strong>
+              {daysLeft} {daysLeft === 1 ? "day" : "days"}
+            </strong>{" "}
+            remaining
+          </span>
         </div>
       )}
 
@@ -442,19 +450,19 @@ export default function App() {
         <div
           style={{
             padding: "10px 20px",
-            background: "#fef2f2",
+            background: "#18181b",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
             fontSize: "12px",
             fontWeight: 500,
-            color: "#dc2626",
-            borderBottom: "1px solid #fecaca",
+            color: "#fbbf24",
           }}
         >
-          ⚠️ Trial expired but billing not configured — Set distribution at
-          partners.shopify.com to enable payments
+          <AlertTriangle size={14} />
+          Trial expired — Set distribution at partners.shopify.com to enable
+          billing
         </div>
       )}
 

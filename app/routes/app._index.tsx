@@ -28,6 +28,7 @@ import {
   TrendingUp,
   Zap,
   RotateCcw,
+  HelpCircle,
 } from "lucide-react";
 
 // ============================================
@@ -1263,7 +1264,7 @@ export default function Dashboard() {
               style={{ marginBottom: "6px" }}
             />
             <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>
-              24h Cooldown
+              Smart Cooldown
             </p>
             <p
               style={{
@@ -1293,6 +1294,82 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
+
+        {/* SETUP GUIDE */}
+        <details
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e5e7eb",
+            marginTop: "20px",
+            overflow: "hidden",
+          }}
+        >
+          <summary
+            style={{
+              padding: "16px 20px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "#374151",
+              listStyle: "none",
+            }}
+          >
+            <HelpCircle size={18} color="#6b7280" />
+            Timer not showing on your store?
+          </summary>
+          <div
+            style={{
+              padding: "0 20px 20px",
+              fontSize: "13px",
+              color: "#4b5563",
+              lineHeight: 1.6,
+            }}
+          >
+            <p style={{ margin: "0 0 12px", color: "#6b7280" }}>
+              Some themes need manual placement. Here's how to fix it in 2
+              minutes:
+            </p>
+            <ol style={{ margin: 0, paddingLeft: "18px" }}>
+              <li style={{ marginBottom: "6px" }}>
+                Go to <strong>Online Store → Themes</strong>
+              </li>
+              <li style={{ marginBottom: "6px" }}>
+                Click <strong>Customize</strong> on your active theme
+              </li>
+              <li style={{ marginBottom: "6px" }}>
+                Navigate to any <strong>Product Page</strong>
+              </li>
+              <li style={{ marginBottom: "6px" }}>
+                Click <strong>Add Block</strong> → find{" "}
+                <strong>Cart Timer</strong>
+              </li>
+              <li style={{ marginBottom: "6px" }}>
+                Drag it above your Add to Cart button
+              </li>
+              <li>
+                Click <strong>Save</strong>
+              </li>
+            </ol>
+            <p
+              style={{
+                margin: "14px 0 0",
+                padding: "10px 12px",
+                background: "#f3f4f6",
+                borderRadius: "8px",
+                fontSize: "12px",
+                color: "#6b7280",
+              }}
+            >
+              Still not working? Email us at{" "}
+              <strong>support@yourapp.com</strong> — we'll fix it for you within
+              24 hours, free.
+            </p>
+          </div>
+        </details>
       </div>
 
       {/* RIGHT — PREVIEW */}
