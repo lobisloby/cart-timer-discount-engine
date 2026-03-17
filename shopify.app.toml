@@ -1,6 +1,6 @@
 client_id = "55db873a11642b8a25325fec3257209a"
-name = "Cart-Timer-Discount-Engine"
-application_url = "https://cart-timer-discount-engine-production.up.railway.app"
+name = "FlashDrop"
+application_url = "https://cart-timer.apps-alchemy.com"
 embedded = true
 
 [build]
@@ -21,9 +21,9 @@ api_version = "2026-04"
 scopes = "write_metaobject_definitions,write_metaobjects,write_products,write_discounts"
 
 [auth]
-redirect_urls = [ "https://cart-timer-discount-engine-production.up.railway.app/auth/callback" ]
+redirect_urls = [ "https://cart-timer.apps-alchemy.com/auth/callback" ]
 
 [app_proxy]
-url = "https://cart-timer-discount-engine-production.up.railway.app/api/storefront"
+url = "https://cart-timer.apps-alchemy.com/api/storefront"
 subpath = "timer"
 prefix = "apps"
