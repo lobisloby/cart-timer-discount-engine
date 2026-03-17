@@ -1365,8 +1365,17 @@ export default function Dashboard() {
               }}
             >
               Still not working? Email us at{" "}
-              <strong>support@yourapp.com</strong> — we'll fix it for you within
-              24 hours, free.
+              <a
+                href="mailto:support@apps-alchemy.com"
+                style={{
+                  color: "#4f46e5",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                support@apps-alchemy.com
+              </a>{" "}
+              — we'll fix it for you within 24 hours, free.
             </p>
           </div>
         </details>
