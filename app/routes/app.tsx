@@ -6,7 +6,7 @@ import type {
   ActionFunctionArgs,
 } from "react-router";
 import { Outlet, useLoaderData, useRouteError, useFetcher } from "react-router";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate, shouldUseTestBilling } from "../shopify.server";
@@ -32,6 +32,8 @@ import {
   Timer,
   Zap,
 } from "lucide-react";
+
+const CRISP_WEBSITE_ID = "92ce78a5-3b9c-47a0-96fb-18032f9286b1";
 
 // ============================================
 // LOADER
@@ -119,6 +121,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     billingAvailable,
     isDev,
     shop,
+    plan: shopRecord.plan,
   };
 };
 
@@ -215,8 +218,96 @@ export default function App() {
     hasSubscription,
     billingAvailable,
     isDev,
+    shop: shopDomain,
+    plan,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+
+  useEffect(() => {
+    if (document.getElementById("crisp-script")) return;
+
+    window.$crisp = [] as unknown[];
+    window.CRISP_WEBSITE_ID = CRISP_WEBSITE_ID;
+
+    const script = document.createElement("script");
+    script.id = "crisp-script";
+    script.src = "https://client.crisp.chat/l.js";
+    script.async = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      const crisp = window.$crisp;
+      if (!crisp) return;
+      crisp.push([
+        "set",
+        "session:data",
+        [
+          [
+            ["app", APP_TITLE],
+            ["shop", shopDomain],
+            ["plan", plan],
+          ],
+        ],
+      ]);
+      crisp.push(["set", "session:segments", [["carttimer"]]]);
+      crisp.push(["set", "user:nickname", [shopDomain]]);
+    };
+
+    return () => {
+      const el = document.getElementById("crisp-script");
+      if (el) el.remove();
+    };
+  }, [shopDomain, plan]);
+
+  const openChat = useCallback(() => {
+    const crisp = window.$crisp;
+    if (!crisp) return;
+    crisp.push(["do", "chat:open"]);
+    crisp.push([
+      "do",
+      "message:send",
+      ["text", `Hi! I need help with ${APP_TITLE}.`],
+    ]);
+  }, []);
+
+  const crispTalkButton = (
+    <div
+      style={{
+        position: "fixed",
+        bottom: "16px",
+        left: "16px",
+        zIndex: 99,
+      }}
+    >
+      <button
+        type="button"
+        onClick={openChat}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "8px 14px",
+          background: "#ffffff",
+          color: "#333",
+          border: "1px solid #d4d4d4",
+          borderRadius: "20px",
+          fontSize: "13px",
+          fontWeight: 500,
+          cursor: "pointer",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          transition: "box-shadow 0.2s",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+        }}
+      >
+        💬 Talk to Developer
+      </button>
+    </div>
+  );
 
   // Redirect to Shopify billing page
   useEffect(() => {
@@ -337,6 +428,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        {crispTalkButton}
       </AppProvider>
     );
   }
@@ -399,6 +491,7 @@ export default function App() {
         {isDev && <s-link href="/app/debug">Debug</s-link>}
       </s-app-nav>
       <Outlet />
+      {crispTalkButton}
     </AppProvider>
   );
 }
