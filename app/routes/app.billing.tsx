@@ -2,20 +2,11 @@
 
 import type { CSSProperties } from "react";
 import type { LoaderFunctionArgs, HeadersFunction } from "react-router";
-import { useLoaderData, useNavigate } from "react-router";
+import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate, PLAN_NAME } from "../shopify.server";
 import prisma from "../db.server";
-import {
-  ArrowLeft,
-  Check,
-  Shield,
-  Zap,
-  Clock,
-  Crown,
-  ExternalLink,
-  Timer,
-} from "lucide-react";
+import { Check, Shield, Zap, Clock, Crown, Timer } from "lucide-react";
 
 const DEFAULT_AMOUNT = "4.99";
 const APP_TITLE = "Cart Timer";
@@ -157,7 +148,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   return {
-    shop,
     billingInfo,
     planName: PLAN_NAME,
     daysLeft,
@@ -180,7 +170,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // ============================================
 export default function BillingPage() {
   const {
-    shop,
     billingInfo,
     planName,
     daysLeft,
@@ -188,7 +177,6 @@ export default function BillingPage() {
     installedAt,
     plan,
   } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
 
   const isPro = plan === "pro" || !!billingInfo;
   const displayAmount = billingInfo?.amount ?? DEFAULT_AMOUNT;
@@ -198,15 +186,6 @@ export default function BillingPage() {
 
   return (
     <div style={styles.page}>
-      <button
-        type="button"
-        onClick={() => navigate("/app")}
-        style={styles.backButton}
-      >
-        <ArrowLeft size={16} />
-        Back to Dashboard
-      </button>
-
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.logoMark}>
@@ -220,30 +199,34 @@ export default function BillingPage() {
       <div style={styles.card}>
         <div style={styles.cardAccent} />
         <div style={styles.cardInner}>
-          <div style={styles.topRow}>
-            <div style={styles.planBadge}>
-              <Crown size={11} />
-              PRO
-            </div>
+          <div style={styles.statusAhead}>
             {isPro ? (
-              <div style={styles.activeBadge}>
-                <Check size={12} strokeWidth={3} />
-                Active
+              <div style={styles.statusAheadActive}>
+                <Check size={22} strokeWidth={3} color="#34d399" />
+                <span>Active</span>
               </div>
             ) : daysLeft > 0 ? (
-              <div style={styles.trialBadge}>
-                <Clock size={12} />
-                {daysLeft} day{daysLeft === 1 ? "" : "s"} left in trial
+              <div style={styles.statusAheadTrial}>
+                <Clock size={20} color="#34d399" />
+                <span>
+                  {daysLeft} day{daysLeft === 1 ? "" : "s"} left in trial
+                </span>
               </div>
             ) : (
-              <div style={styles.expiredBadge}>
-                <Clock size={12} />
-                Trial ended
+              <div style={styles.statusAheadExpired}>
+                <Clock size={20} color="#f87171" />
+                <span>Trial ended</span>
               </div>
             )}
           </div>
 
-          <div style={styles.planLabel}>{planName}</div>
+          <div style={styles.planRow}>
+            <div style={styles.planBadge}>
+              <Crown size={11} />
+              PRO
+            </div>
+            <div style={styles.planLabel}>{planName}</div>
+          </div>
 
           <div style={styles.priceSection}>
             <span style={styles.dollar}>{sym}</span>
@@ -300,17 +283,6 @@ export default function BillingPage() {
               </span>
             </div>
           </div>
-
-          <a
-            href={`https://${shop}/admin/settings/billing`}
-            target="_top"
-            rel="noreferrer"
-            style={styles.manageButton}
-          >
-            Manage Subscription
-            <ExternalLink size={14} />
-          </a>
-          <p style={styles.ctaNote}>Billed securely through Shopify</p>
         </div>
       </div>
 
@@ -348,20 +320,6 @@ const styles: { [key: string]: CSSProperties } = {
     padding: "24px 16px 48px",
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-
-  backButton: {
-    fontSize: "13px",
-    fontWeight: 500,
-    color: "#71717a",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    marginBottom: "20px",
-    padding: 0,
   },
 
   header: {
@@ -406,13 +364,45 @@ const styles: { [key: string]: CSSProperties } = {
     padding: "28px 24px",
   },
 
-  topRow: {
+  statusAhead: {
+    marginBottom: "20px",
+    textAlign: "center" as const,
+  },
+  statusAheadActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+    fontSize: "26px",
+    fontWeight: "800",
+    color: "#34d399",
+    letterSpacing: "-0.02em",
+  },
+  statusAheadTrial: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+    fontSize: "17px",
+    fontWeight: "700",
+    color: "#34d399",
+  },
+  statusAheadExpired: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+    fontSize: "17px",
+    fontWeight: "700",
+    color: "#f87171",
+  },
+
+  planRow: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "12px",
-    gap: "8px",
-    flexWrap: "wrap",
+    gap: "12px",
+    marginBottom: "16px",
+    flexWrap: "wrap" as const,
   },
   planBadge: {
     display: "inline-flex",
@@ -427,48 +417,13 @@ const styles: { [key: string]: CSSProperties } = {
     color: "#60a5fa",
     letterSpacing: "1.5px",
   },
-  trialBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    padding: "4px 10px",
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
-    border: "1px solid rgba(16, 185, 129, 0.2)",
-    borderRadius: "6px",
-    fontSize: "11px",
-    fontWeight: "600",
-    color: "#34d399",
-  },
-  activeBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    padding: "4px 10px",
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-    border: "1px solid rgba(16, 185, 129, 0.25)",
-    borderRadius: "6px",
-    fontSize: "11px",
-    fontWeight: "600",
-    color: "#34d399",
-  },
-  expiredBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "5px",
-    padding: "4px 10px",
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    border: "1px solid rgba(239, 68, 68, 0.25)",
-    borderRadius: "6px",
-    fontSize: "11px",
-    fontWeight: "600",
-    color: "#f87171",
-  },
-
   planLabel: {
     fontSize: "13px",
     fontWeight: "600",
     color: "#a1a1aa",
-    marginBottom: "16px",
+    marginBottom: 0,
+    flex: "1",
+    minWidth: 0,
   },
 
   priceSection: {
@@ -536,7 +491,7 @@ const styles: { [key: string]: CSSProperties } = {
   },
 
   metaBlock: {
-    marginBottom: "20px",
+    marginBottom: 0,
   },
   metaRow: {
     display: "flex",
@@ -556,30 +511,6 @@ const styles: { [key: string]: CSSProperties } = {
     fontWeight: 500,
     color: "#d4d4d8",
     textAlign: "right",
-  },
-
-  manageButton: {
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-    padding: "12px 24px",
-    backgroundColor: "#2563eb",
-    color: "#fff",
-    border: "none",
-    borderRadius: "10px",
-    fontSize: "13px",
-    fontWeight: "700",
-    textDecoration: "none",
-    boxSizing: "border-box" as const,
-  },
-  ctaNote: {
-    textAlign: "center" as const,
-    fontSize: "11px",
-    color: "#3f3f46",
-    marginTop: "10px",
-    marginBottom: 0,
   },
 
   trustRow: {
