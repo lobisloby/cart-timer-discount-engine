@@ -17,7 +17,6 @@ import {
   Palette,
   Power,
   Check,
-  Clock,
   Type,
   Eye,
   Moon,
@@ -34,7 +33,14 @@ import {
 // ============================================
 // SHOPIFY DISCOUNT MANAGEMENT
 // ============================================
-async function deleteOldDiscount(admin: any, discountId: string) {
+type AdminGraphql = {
+  graphql: (
+    query: string,
+    options?: { variables?: Record<string, unknown> },
+  ) => Promise<Response>;
+};
+
+async function deleteOldDiscount(admin: AdminGraphql, discountId: string) {
   try {
     await admin.graphql(
       `#graphql
@@ -53,9 +59,8 @@ async function deleteOldDiscount(admin: any, discountId: string) {
 }
 
 async function createShopifyDiscount(
-  admin: any,
+  admin: AdminGraphql,
   discountPercent: number,
-  shop: string,
 ): Promise<{ code: string; id: string } | null> {
   try {
     const code =
@@ -160,7 +165,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const discount = await createShopifyDiscount(
           admin,
           campaign.discountPercent,
-          shop,
         );
         if (discount) {
           await prisma.campaign.update({
@@ -232,7 +236,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const newDiscount = await createShopifyDiscount(
           admin,
           data.discountPercent,
-          shop,
         );
         if (newDiscount) {
           discountCode = newDiscount.code;
@@ -493,7 +496,28 @@ const S = {
 // ============================================
 // LIVE PREVIEW
 // ============================================
-function LivePreview({ settings }: { settings: any }) {
+type PreviewSettings = {
+  timerStyle: string;
+  urgencyText: string;
+  footerText: string;
+  primaryColor: string;
+  discountPercent: number;
+  timerMinutes: number;
+};
+
+type ThemeTokens = {
+  bg: string;
+  text: string;
+  num: string;
+  sub: string;
+  numBg: string;
+  numBdr: string;
+  track: string;
+  fill: string;
+  foot: string;
+};
+
+function LivePreview({ settings }: { settings: PreviewSettings }) {
   const {
     timerStyle,
     urgencyText,
@@ -503,7 +527,7 @@ function LivePreview({ settings }: { settings: any }) {
     timerMinutes,
   } = settings;
 
-  const themes: Record<string, any> = {
+  const themes: Record<string, ThemeTokens> = {
     dark: {
       bg: "linear-gradient(145deg, #0f172a, #1e293b)",
       text: "#f1f5f9",
@@ -731,12 +755,24 @@ function LivePreview({ settings }: { settings: any }) {
 // ============================================
 // MAIN COMPONENT
 // ============================================
+type DashboardSettings = {
+  enabled: boolean;
+  discountPercent: number;
+  timerMinutes: number;
+  cooldownHours: number;
+  displayStyle: string;
+  primaryColor: string;
+  timerStyle: string;
+  urgencyText: string;
+  footerText: string;
+};
+
 export default function Dashboard() {
   const { campaign, shopName } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
-  const [s, setS] = useState({
+  const [s, setS] = useState<DashboardSettings>({
     enabled: campaign?.enabled ?? false,
     discountPercent: campaign?.discountPercent ?? 10,
     timerMinutes: campaign?.timerMinutes ?? 10,
@@ -803,7 +839,10 @@ export default function Dashboard() {
   }, []);
 
   const isLoading = fetcher.state !== "idle";
-  const update = (key: string, val: any) => setS((p) => ({ ...p, [key]: val }));
+  const update = <K extends keyof DashboardSettings>(
+    key: K,
+    val: DashboardSettings[K],
+  ) => setS((p) => ({ ...p, [key]: val }));
 
   return (
     <div style={S.page}>
@@ -1134,6 +1173,7 @@ export default function Dashboard() {
               }}
             >
               <label
+                htmlFor="ct-urgency-headline"
                 style={{
                   fontSize: "13px",
                   fontWeight: 500,
@@ -1154,6 +1194,7 @@ export default function Dashboard() {
               </span>
             </div>
             <input
+              id="ct-urgency-headline"
               type="text"
               className="ct-dash-input"
               value={s.urgencyText}
@@ -1174,6 +1215,7 @@ export default function Dashboard() {
               }}
             >
               <label
+                htmlFor="ct-footer-message"
                 style={{
                   fontSize: "13px",
                   fontWeight: 500,
@@ -1194,6 +1236,7 @@ export default function Dashboard() {
               </span>
             </div>
             <input
+              id="ct-footer-message"
               type="text"
               className="ct-dash-input"
               value={s.footerText}
@@ -1330,7 +1373,7 @@ export default function Dashboard() {
             }}
           >
             <p style={{ margin: "0 0 12px", color: "#6b7280" }}>
-              Some themes need manual placement. Here's how to fix it in 2
+              Some themes need manual placement. Here&apos;s how to fix it in 2
               minutes:
             </p>
             <ol style={{ margin: 0, paddingLeft: "18px" }}>
@@ -1365,7 +1408,7 @@ export default function Dashboard() {
               }}
             >
               Still not working? Email us at{" "}
-              <strong>support@apps-alchemy.com </strong> — we'll fix it for you within
+              <strong>support@apps-alchemy.com </strong> — we&apos;ll fix it for you within
               24 hours, free.
             </p>
           </div>

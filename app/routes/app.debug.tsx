@@ -5,6 +5,7 @@ import { useLoaderData, useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import prisma from "../db.server";
+import type { TimerSession } from "@prisma/client";
 import { RotateCcw, Trash2, Database, Users, Clock } from "lucide-react";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -72,7 +73,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function DebugPage() {
-  const { shop, campaign, timerSessions, stats } = useLoaderData<typeof loader>();
+  const { campaign, timerSessions, stats } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
 
   const isLoading = fetcher.state !== "idle";
@@ -114,7 +115,7 @@ export default function DebugPage() {
     return date.toLocaleString();
   };
 
-  const getStatus = (s: any) => {
+  const getStatus = (s: TimerSession) => {
     const now = new Date();
     if (!s.isExpired && new Date(s.expiresAt) > now) return { label: "⏳ Active", color: "#10b981" };
     if (s.cooldownUntil && new Date(s.cooldownUntil) > now) return { label: "🚫 Cooldown", color: "#f59e0b" };
@@ -217,7 +218,7 @@ export default function DebugPage() {
           <p style={{ color: "#64748b", fontSize: "14px" }}>No sessions yet — visit a product page to create one</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {timerSessions.map((s: any) => {
+            {timerSessions.map((s) => {
               const status = getStatus(s);
               return (
                 <div key={s.id} style={{

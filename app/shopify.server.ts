@@ -11,6 +11,23 @@ import prisma from "./db.server";
 
 export const PLAN_NAME = "Pro Plan";
 
+/**
+ * Whether new app charges use Shopify test billing (no real charges).
+ * - Non-production builds always use test billing.
+ * - Set SHOPIFY_BILLING_TEST=true to force test mode for every shop (e.g. staging only).
+ * - Set BILLING_TEST_SHOPS to a comma-separated list of myshopify.com domains to enable
+ *   test billing only for those shops in production (e.g. your development store).
+ */
+export function shouldUseTestBilling(shop: string): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  if (process.env.SHOPIFY_BILLING_TEST === "true") return true;
+  const allowlist = (process.env.BILLING_TEST_SHOPS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return allowlist.includes(shop.toLowerCase());
+}
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",

@@ -14,10 +14,19 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/webhooks/customers/data_request": {
+    params: {};
+  };
   "/webhooks/app/scopes_update": {
     params: {};
   };
+  "/webhooks/customers/redact": {
+    params: {};
+  };
   "/webhooks/app/uninstalled": {
+    params: {};
+  };
+  "/webhooks/shop/redact": {
     params: {};
   };
   "/api/storefront": {
@@ -48,15 +57,27 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/api/storefront" | "/auth/login" | "/auth/*" | "/app" | "/app/additional" | "/app/billing" | "/app/debug";
+    page: "/" | "/webhooks/customers/data_request" | "/webhooks/app/scopes_update" | "/webhooks/customers/redact" | "/webhooks/app/uninstalled" | "/webhooks/shop/redact" | "/api/storefront" | "/auth/login" | "/auth/*" | "/app" | "/app/additional" | "/app/billing" | "/app/debug";
+  };
+  "routes/webhooks.customers.data_request.tsx": {
+    id: "routes/webhooks.customers.data_request";
+    page: "/webhooks/customers/data_request";
   };
   "routes/webhooks.app.scopes_update.tsx": {
     id: "routes/webhooks.app.scopes_update";
     page: "/webhooks/app/scopes_update";
   };
+  "routes/webhooks.customers.redact.tsx": {
+    id: "routes/webhooks.customers.redact";
+    page: "/webhooks/customers/redact";
+  };
   "routes/webhooks.app.uninstalled.tsx": {
     id: "routes/webhooks.app.uninstalled";
     page: "/webhooks/app/uninstalled";
+  };
+  "routes/webhooks.shop.redact.tsx": {
+    id: "routes/webhooks.shop.redact";
+    page: "/webhooks/shop/redact";
   };
   "routes/api.storefront.tsx": {
     id: "routes/api.storefront";
@@ -98,8 +119,11 @@ type RouteFiles = {
 
 type RouteModules = {
   "root": typeof import("./app/root.tsx");
+  "routes/webhooks.customers.data_request": typeof import("./app/routes/webhooks.customers.data_request.tsx");
   "routes/webhooks.app.scopes_update": typeof import("./app/routes/webhooks.app.scopes_update.tsx");
+  "routes/webhooks.customers.redact": typeof import("./app/routes/webhooks.customers.redact.tsx");
   "routes/webhooks.app.uninstalled": typeof import("./app/routes/webhooks.app.uninstalled.tsx");
+  "routes/webhooks.shop.redact": typeof import("./app/routes/webhooks.shop.redact.tsx");
   "routes/api.storefront": typeof import("./app/routes/api.storefront.tsx");
   "routes/auth.login": typeof import("./app/routes/auth.login/route.tsx");
   "routes/_index": typeof import("./app/routes/_index/route.tsx");

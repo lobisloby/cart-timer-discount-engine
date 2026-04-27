@@ -9,7 +9,7 @@ import { Outlet, useLoaderData, useRouteError, useFetcher } from "react-router";
 import { useEffect } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { authenticate, PLAN_NAME } from "../shopify.server";
+import { authenticate, PLAN_NAME, shouldUseTestBilling } from "../shopify.server";
 import prisma from "../db.server";
 import { AlertTriangle, Clock } from "lucide-react";
 
@@ -61,13 +61,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
         `,
       );
-      const data = await response.json();
-      const subs = data.data?.currentAppInstallation?.activeSubscriptions || [];
+      const data = (await response.json()) as {
+        data?: {
+          currentAppInstallation?: {
+            activeSubscriptions?: Array<{ name: string; status: string }>;
+          };
+        };
+      };
+      const subs =
+        data.data?.currentAppInstallation?.activeSubscriptions ?? [];
 
       billingAvailable = true;
 
       hasSubscription = subs.some(
-        (s: any) => s.status === "ACTIVE" && s.name === PLAN_NAME,
+        (row) => row.status === "ACTIVE" && row.name === PLAN_NAME,
       );
 
       if (hasSubscription && shopRecord.plan !== "pro") {
@@ -107,7 +114,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const shopName = session.shop.replace(".myshopify.com", "");
   const returnUrl = `https://admin.shopify.com/store/${shopName}/apps/${process.env.SHOPIFY_API_KEY}`;
-  const isTest = process.env.NODE_ENV !== "production";
+  const isTest = shouldUseTestBilling(session.shop);
 
   try {
     const response = await admin.graphql(
@@ -157,7 +164,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const result = data.data?.appSubscriptionCreate;
 
     if (result?.userErrors?.length > 0) {
-      const errorMsg = result.userErrors.map((e: any) => e.message).join(", ");
+      const errorMsg = result.userErrors
+        .map((e: { message: string }) => e.message)
+        .join(", ");
 
       if (errorMsg.includes("public distribution")) {
         return {

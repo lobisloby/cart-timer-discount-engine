@@ -10,7 +10,7 @@ const headers = {
   "Access-Control-Allow-Origin": "*",
 };
 
-function json(data: any, status = 200) {
+function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
