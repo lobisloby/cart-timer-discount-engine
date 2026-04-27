@@ -11,7 +11,26 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate, PLAN_NAME, shouldUseTestBilling } from "../shopify.server";
 import prisma from "../db.server";
-import { AlertTriangle, Clock } from "lucide-react";
+import { computeTrialState } from "../lib/trial";
+import {
+  APP_SUBTITLE,
+  APP_TITLE,
+  BILLING_FEATURES,
+  DEFAULT_PRICE_AMOUNT,
+  currencySymbol,
+  primaryCtaStyle,
+  shell,
+  splitPrice,
+} from "../lib/billing-shell";
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Crown,
+  Shield,
+  Timer,
+  Zap,
+} from "lucide-react";
 
 // ============================================
 // LOADER
@@ -28,17 +47,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
     console.log("💳 New shop registered:", shop);
   }
-
-  // Calculate trial
-  const now = new Date();
-  const installedAt = new Date(shopRecord.installedAt);
-  const trialEndDate = new Date(installedAt);
-  trialEndDate.setDate(trialEndDate.getDate() + 7);
-  const daysLeft = Math.max(
-    0,
-    Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-  );
-  const trialExpired = daysLeft <= 0;
 
   // Always verify billing against Shopify — DB `plan` alone can be stale after uninstall/reinstall.
   let hasSubscription = false;
@@ -93,16 +101,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hasSubscription = shopRecord.plan === "pro";
   }
 
+  const trial = computeTrialState(new Date(shopRecord.installedAt));
+
   const isDev = process.env.NODE_ENV !== "production";
 
   console.log(
-    `💳 ${shop} | Plan: ${shopRecord.plan} | Days left: ${daysLeft} | Subscribed: ${hasSubscription} | Billing available: ${billingAvailable} | Dev: ${isDev}`,
+    `💳 ${shop} | Plan: ${shopRecord.plan} | Days left: ${trial.daysLeft} | Subscribed: ${hasSubscription} | Billing available: ${billingAvailable} | Dev: ${isDev}`,
   );
 
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
-    trialExpired,
-    daysLeft,
+    trialExpired: trial.trialExpired,
+    daysLeft: trial.daysLeft,
+    trialEndDateFormatted: trial.trialEndDateFormatted,
     hasSubscription,
     billingAvailable,
     isDev,
@@ -199,6 +210,7 @@ export default function App() {
     apiKey,
     trialExpired,
     daysLeft,
+    trialEndDateFormatted,
     hasSubscription,
     billingAvailable,
     isDev,
@@ -218,207 +230,109 @@ export default function App() {
 
   // ───────────────────────────────────────────
   // TRIAL EXPIRED + NO SUBSCRIPTION + BILLING WORKS
-  // → Block with paywall
+  // → Block with paywall (same shell theme as billing)
   // ───────────────────────────────────────────
   if (trialExpired && !hasSubscription && billingAvailable) {
     const isLoading = fetcher.state !== "idle";
     const error =
       fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
+    const { whole, cents } = splitPrice(DEFAULT_PRICE_AMOUNT);
+    const sym = currencySymbol("USD");
 
     return (
       <AppProvider embedded apiKey={apiKey}>
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            background: "linear-gradient(135deg, #f8fafc 0%, #fef2f2 100%)",
-          }}
-        >
-          <div
-            style={{ maxWidth: "480px", width: "100%", textAlign: "center" }}
-          >
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "20px",
-                background: "linear-gradient(135deg, #ef4444, #f97316)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 24px",
-                fontSize: "36px",
-                boxShadow: "0 8px 32px rgba(239, 68, 68, 0.3)",
-              }}
-            >
-              ⏰
+        <div style={shell.page}>
+          <div style={shell.header}>
+            <div style={shell.logoMark}>
+              <Timer size={24} color="#fafafa" strokeWidth={2.25} />
             </div>
+            <h1 style={shell.title}>{APP_TITLE}</h1>
+            <p style={shell.subtitle}>{APP_SUBTITLE}</p>
+          </div>
 
-            <h1
-              style={{
-                fontSize: "28px",
-                fontWeight: 800,
-                color: "#0f172a",
-                margin: "0 0 8px",
-              }}
-            >
-              Your Free Trial Has Ended
-            </h1>
-            <p
-              style={{
-                fontSize: "16px",
-                color: "#64748b",
-                margin: "0 0 32px",
-                lineHeight: "1.5",
-              }}
-            >
-              Subscribe to continue using Cart Timer Discount Engine
-            </p>
-
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: "16px",
-                border: "1px solid #e2e8f0",
-                padding: "28px",
-                marginBottom: "20px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  color: "#6366f1",
-                  background: "#eef2ff",
-                  padding: "6px 16px",
-                  borderRadius: "20px",
-                  display: "inline-block",
-                  marginBottom: "16px",
-                }}
-              >
-                Pro Plan
+          <div style={shell.card}>
+            <div style={shell.cardAccent} />
+            <div style={shell.cardInner}>
+              <div style={shell.statusAhead}>
+                <div style={shell.statusAheadExpired}>
+                  <Clock size={22} color="#f87171" strokeWidth={2.25} />
+                  <span>Trial ended</span>
+                </div>
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  justifyContent: "center",
-                  gap: "4px",
-                  marginBottom: "24px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "48px",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                  }}
-                >
-                  $4.99
-                </span>
-                <span
-                  style={{
-                    fontSize: "16px",
-                    color: "#94a3b8",
-                    fontWeight: 500,
-                  }}
-                >
-                  /month
-                </span>
+              <div style={shell.planRow}>
+                <div style={shell.planBadge}>
+                  <Crown size={11} />
+                  PRO
+                </div>
+                <div style={shell.planLabel}>{PLAN_NAME}</div>
               </div>
 
-              <div style={{ textAlign: "left", marginBottom: "24px" }}>
-                {[
-                  "Customizable countdown timer",
-                  "Automatic discount code creation",
-                  "3 beautiful timer styles",
-                  "Custom colors & text",
-                  "Real price discount on cart",
-                  "24h cooldown protection",
-                ].map((feature) => (
-                  <div
-                    key={feature}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      padding: "8px 0",
-                      borderBottom: "1px solid #f8fafc",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: "22px",
-                        height: "22px",
-                        borderRadius: "6px",
-                        background: "#dcfce7",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "12px",
-                        flexShrink: 0,
-                      }}
-                    >
-                      ✓
-                    </span>
-                    <span style={{ fontSize: "14px", color: "#374151" }}>
-                      {feature}
-                    </span>
+              <div style={shell.priceSection}>
+                <span style={shell.dollar}>{sym}</span>
+                <span style={shell.priceAmount}>{whole}</span>
+                <span style={shell.priceCents}>{cents}</span>
+                <span style={shell.priceInterval}>/mo</span>
+              </div>
+
+              <div style={shell.divider} />
+
+              <div style={shell.featuresGrid}>
+                {BILLING_FEATURES.map((feature) => (
+                  <div key={feature} style={shell.featureItem}>
+                    <div style={shell.checkIcon}>
+                      <Check size={10} color="#fff" strokeWidth={3} />
+                    </div>
+                    <span style={shell.featureText}>{feature}</span>
                   </div>
                 ))}
               </div>
 
-              {error && (
-                <div
-                  style={{
-                    padding: "12px 16px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: "10px",
-                    marginBottom: "16px",
-                    fontSize: "13px",
-                    color: "#dc2626",
-                    textAlign: "left",
-                    lineHeight: "1.5",
-                  }}
-                >
-                  ⚠️ {error}
+              <div style={shell.divider} />
+
+              <div style={shell.metaBlock}>
+                <div style={shell.metaRow}>
+                  <span style={shell.metaKey}>Trial ended</span>
+                  <span style={shell.metaVal}>{trialEndDateFormatted}</span>
                 </div>
+                <div style={shell.metaRowLast}>
+                  <span style={shell.metaKey}>Next step</span>
+                  <span style={shell.metaVal}>Subscribe to restore access</span>
+                </div>
+              </div>
+
+              {error && (
+                <div style={shell.errorBox}>⚠️ {error}</div>
               )}
 
               <fetcher.Form method="POST">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  style={{
-                    width: "100%",
-                    padding: "16px",
-                    fontSize: "16px",
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: isLoading
-                      ? "#a5b4fc"
-                      : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                    border: "none",
-                    borderRadius: "12px",
-                    cursor: isLoading ? "default" : "pointer",
-                    boxShadow: isLoading
-                      ? "none"
-                      : "0 4px 16px rgba(99, 102, 241, 0.4)",
-                  }}
+                  style={primaryCtaStyle(isLoading)}
                 >
                   {isLoading
-                    ? "⏳ Setting up..."
-                    : "🚀 Subscribe Now — $4.99/mo"}
+                    ? "⏳ Opening billing…"
+                    : `Subscribe — ${sym}${DEFAULT_PRICE_AMOUNT}/mo`}
                 </button>
               </fetcher.Form>
+            </div>
+          </div>
+
+          <div style={shell.trustRow}>
+            <div style={shell.trustItem}>
+              <Shield size={14} color="#71717a" />
+              <span style={shell.trustText}>Secure billing</span>
+            </div>
+            <span style={shell.trustDot}>•</span>
+            <div style={shell.trustItem}>
+              <Zap size={14} color="#71717a" />
+              <span style={shell.trustText}>Quick setup</span>
+            </div>
+            <span style={shell.trustDot}>•</span>
+            <div style={shell.trustItem}>
+              <Clock size={14} color="#71717a" />
+              <span style={shell.trustText}>Cancel anytime</span>
             </div>
           </div>
         </div>
@@ -481,7 +395,6 @@ export default function App() {
 
       <s-app-nav>
         <s-link href="/app">Dashboard</s-link>
-        <s-link href="/app/billing">Billing</s-link>
         {isDev && <s-link href="/app/debug">Debug</s-link>}
       </s-app-nav>
       <Outlet />

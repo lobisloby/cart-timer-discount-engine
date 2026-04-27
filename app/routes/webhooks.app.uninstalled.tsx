@@ -72,13 +72,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Cancel while offline session still exists in DB (before deleteMany below).
   await cancelActiveAppSubscriptions(shop);
 
-  await db.shop.updateMany({
-    where: { shop },
-    data: {
-      plan: "trial",
-      installedAt: new Date(),
-    },
-  });
+  // Remove shop row so the next install gets a fresh `installedAt` and full trial window.
+  await db.timerSession.deleteMany({ where: { shop } });
+  await db.campaign.deleteMany({ where: { shop } });
+  await db.shop.deleteMany({ where: { shop } });
 
   await db.session.deleteMany({ where: { shop } });
 
