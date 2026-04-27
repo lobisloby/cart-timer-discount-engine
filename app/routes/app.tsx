@@ -40,53 +40,57 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
   const trialExpired = daysLeft <= 0;
 
-  // Check Shopify subscription
+  // Always verify billing against Shopify — DB `plan` alone can be stale after uninstall/reinstall.
   let hasSubscription = false;
   let billingAvailable = false;
 
-  if (shopRecord.plan === "pro") {
-    hasSubscription = true;
-    billingAvailable = true;
-  } else {
-    try {
-      const response = await admin.graphql(
-        `#graphql
-          query {
-            currentAppInstallation {
-              activeSubscriptions {
-                name
-                status
-              }
+  try {
+    const response = await admin.graphql(
+      `#graphql
+        query SubscriptionCheck {
+          currentAppInstallation {
+            activeSubscriptions {
+              name
+              status
             }
           }
-        `,
-      );
-      const data = (await response.json()) as {
-        data?: {
-          currentAppInstallation?: {
-            activeSubscriptions?: Array<{ name: string; status: string }>;
-          };
+        }
+      `,
+    );
+    const data = (await response.json()) as {
+      data?: {
+        currentAppInstallation?: {
+          activeSubscriptions?: Array<{ name: string; status: string }>;
         };
       };
-      const subs =
-        data.data?.currentAppInstallation?.activeSubscriptions ?? [];
+    };
+    const subs =
+      data.data?.currentAppInstallation?.activeSubscriptions ?? [];
 
-      billingAvailable = true;
+    billingAvailable = true;
 
-      hasSubscription = subs.some(
-        (row) => row.status === "ACTIVE" && row.name === PLAN_NAME,
-      );
+    hasSubscription = subs.some(
+      (row) => row.status === "ACTIVE" && row.name === PLAN_NAME,
+    );
 
-      if (hasSubscription && shopRecord.plan !== "pro") {
-        await prisma.shop.update({
+    if (hasSubscription) {
+      if (shopRecord.plan !== "pro") {
+        shopRecord = await prisma.shop.update({
           where: { shop },
           data: { plan: "pro" },
         });
       }
-    } catch (e) {
-      console.error("💳 Subscription check failed:", (e as Error).message);
-      billingAvailable = false;
+    } else if (shopRecord.plan === "pro") {
+      shopRecord = await prisma.shop.update({
+        where: { shop },
+        data: { plan: "trial" },
+      });
     }
+  } catch (e) {
+    console.error("💳 Subscription check failed:", (e as Error).message);
+    billingAvailable = false;
+    // Avoid blocking real subscribers if Shopify is briefly unavailable
+    hasSubscription = shopRecord.plan === "pro";
   }
 
   const isDev = process.env.NODE_ENV !== "production";

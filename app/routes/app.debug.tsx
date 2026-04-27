@@ -110,8 +110,8 @@ export default function DebugPage() {
     border: "1px solid #f1f5f9",
   };
 
-  const formatDate = (d: string) => {
-    const date = new Date(d);
+  const formatDate = (d: string | Date) => {
+    const date = typeof d === "string" ? new Date(d) : d;
     return date.toLocaleString();
   };
 
