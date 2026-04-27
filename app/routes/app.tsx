@@ -9,8 +9,9 @@ import { Outlet, useLoaderData, useRouteError, useFetcher } from "react-router";
 import { useEffect } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { authenticate, PLAN_NAME, shouldUseTestBilling } from "../shopify.server";
+import { authenticate, shouldUseTestBilling } from "../shopify.server";
 import prisma from "../db.server";
+import { PLAN_NAME } from "../lib/plan";
 import { computeTrialState } from "../lib/trial";
 import {
   APP_SUBTITLE,

@@ -9,8 +9,6 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
-export const PLAN_NAME = "Pro Plan";
-
 /**
  * Whether new app charges use Shopify test billing (no real charges).
  * - Non-production builds always use test billing.
